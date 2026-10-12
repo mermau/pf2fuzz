@@ -1,0 +1,56 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # per pubblicare le release quando si crea un tag v*
+
+jobs:
+  macos:
+    runs-on: macos-14          # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configura (universal binary arm64 + x86_64)
+        run: cmake -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Compila
+        run: cmake --build build --config Release --parallel
+
+      - name: Test del modello
+        run: ./build/Release/circuit_test
+
+      - name: Firma ad-hoc e pacchetto
+        run: |
+          A=build/PF2Fuzz_artefacts/Release
+          mkdir -p "dist/PF-2 Fuzz"
+          cp -R "$A/VST3/PF-2 Fuzz.vst3" "$A/AU/PF-2 Fuzz.component" "$A/Standalone/PF-2 Fuzz.app" "dist/PF-2 Fuzz/"
+          for p in "dist/PF-2 Fuzz/"*; do codesign --force --deep --sign - "$p"; done
+          cp scripts/installa.command "dist/PF-2 Fuzz/Installa PF-2 Fuzz.command"
+          chmod +x "dist/PF-2 Fuzz/Installa PF-2 Fuzz.command"
+          cp README.md "dist/PF-2 Fuzz/"
+          lipo -info "dist/PF-2 Fuzz/PF-2 Fuzz.vst3/Contents/MacOS/PF-2 Fuzz"
+          (cd dist && ditto -c -k --keepParent "PF-2 Fuzz" ../PF2Fuzz-macOS.zip)
+
+      - name: Carica l'artefatto
+        uses: actions/upload-artifact@v4
+        with:
+          name: PF2Fuzz-macOS
+          path: PF2Fuzz-macOS.zip
+
+      - name: Pubblica la release (solo per i tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" PF2Fuzz-macOS.zip --title "PF-2 Fuzz ${GITHUB_REF_NAME}" --notes "Build macOS universale (Apple Silicon e Intel): VST3, AU e Standalone."
