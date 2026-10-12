@@ -225,6 +225,17 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         mixer.pushDrySamples (block);
 
         auto* x = mono.getChannelPointer (0);
+
+        // la chitarra può arrivare su uno qualsiasi dei due ingressi (es. ingresso 2 Hi-Z):
+        // se i canali sono copie identiche si usa il primo, altrimenti si sommano
+        if (numCh > 1)
+        {
+            const auto* r = block.getChannelPointer (1);
+            bool identical = true;
+            for (int i = 0; i < n && identical; ++i) identical = std::abs (x[i] - r[i]) < 1.0e-7f;
+            if (! identical) juce::FloatVectorOperations::add (x, r, n);
+        }
+
         for (int i = 0; i < n; ++i) x[i] *= inGainSm.getNextValue() * voltsPerFS;
 
         auto up = oversampling->processSamplesUp (mono);

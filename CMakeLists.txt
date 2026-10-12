@@ -35,6 +35,8 @@ juce_add_plugin(PF2Fuzz
     AU_MAIN_TYPE kAudioUnitType_Effect   # AU standard ("aufx"): va negli slot Audio FX di Logic
     VST3_CATEGORIES Fx Distortion
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    MICROPHONE_PERMISSION_ENABLED TRUE        # macOS: senza, la Standalone riceve solo silenzio
+    MICROPHONE_PERMISSION_TEXT "PF-2 Fuzz usa l'ingresso della scheda audio per elaborare il segnale della chitarra."
     COPY_PLUGIN_AFTER_BUILD TRUE)
 
 target_sources(PF2Fuzz PRIVATE

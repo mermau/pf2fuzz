@@ -19,7 +19,7 @@ Il FY-2 originale ha un'uscita molto bassa (circa 30 mV rms). Il plugin la porta
 utilizzabile con +18 dB di guadagno pulito dopo il circuito: OUTPUT a 0 dB equivale ad
 alzare l'amplificatore, il suono del pedale non cambia.
 
-Il pedale è mono: il plugin elabora il canale sinistro (o l'unico canale) e lo copia sugli altri.
+Il pedale è mono: il plugin prende la chitarra da qualunque ingresso arrivi (sinistro o destro) e copia l'uscita su tutti i canali.
 
 **MIDI Learn**: clic destro su un comando → *MIDI Learn* → muovi un controllo della KeyLab.
 La mappatura è salvata nel progetto. Il footswitch commuta alla pressione: imposta il
@@ -67,6 +67,12 @@ Ogni modifica su `main` viene compilata automaticamente da GitHub Actions su mac
    poi fai doppio clic su **Installa PF-2 Fuzz.command**. Copia VST3 e AU nelle cartelle dei
    plugin dell'utente e l'app Standalone in Applicazioni.
 4. Riavvia la DAW (in Logic: se non compare, *Plug-in Manager → Reimposta e riscansiona*).
+
+**Standalone**: al primo avvio macOS chiede il permesso di usare il microfono (cioè gli ingressi
+della scheda audio): concedilo. JUCE avvia la Standalone con l'ingresso silenziato per evitare
+fischi di feedback: compare la scritta *"Audio input is muted to avoid feedback loop"*; premi il
+pulsante accanto oppure togli la spunta *Mute audio input* in **Options → Audio/MIDI Settings**,
+dove scegli anche la scheda audio come ingresso e uscita.
 
 ## Compilazione
 
