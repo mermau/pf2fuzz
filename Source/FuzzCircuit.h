@@ -123,7 +123,7 @@ public:
         }
 
         std::array<double, NP> cur {};
-        newton (p0, cur, 12);
+        newton (p0, cur, 40);
 
         for (size_t r = 0; r < NN; ++r)
         {
@@ -218,21 +218,54 @@ private:
             for (size_t k = 0; k < NP; ++k) K[r][k] = P[r][(size_t) curNode[k]];
     }
 
+    // Esponenziale di giunzione con prolungamento lineare oltre vmax: continuo e con
+    // derivata coerente (evita Jacobiani errati e mancate convergenze)
+    static inline void junctionExp (double v, double& e, double& de)
+    {
+        constexpr double vmax = 1.0;
+        if (v <= vmax) { e = std::exp (v / BJT::Vt); de = e / BJT::Vt; }
+        else
+        {
+            const double em = std::exp (vmax / BJT::Vt);
+            e = em * (1.0 + (v - vmax) / BJT::Vt);
+            de = em / BJT::Vt;
+        }
+    }
+
     // Ebers-Moll: correnti e derivate di un transistor (Ib, Ic) rispetto a (Vbe, Vbc)
     static inline void ebersMoll (double vbe, double vbc, double& ib, double& ic, double d[2][2])
     {
         using T = BJT;
-        const double ef = std::exp (std::min (vbe, 1.2) / T::Vt);
-        const double er = std::exp (std::min (vbc, 1.2) / T::Vt);
+        double ef, def, er, der;
+        junctionExp (vbe, ef, def);
+        junctionExp (vbc, er, der);
         ic = T::Is * (ef - er) - T::Is / T::betaR * (er - 1.0);
         ib = T::Is / T::betaF * (ef - 1.0) + T::Is / T::betaR * (er - 1.0);
-        d[0][0] = T::Is / T::betaF * ef / T::Vt;          // dIb/dVbe
-        d[0][1] = T::Is / T::betaR * er / T::Vt;          // dIb/dVbc
-        d[1][0] = T::Is * ef / T::Vt;                     // dIc/dVbe
-        d[1][1] = -T::Is * er / T::Vt * (1.0 + 1.0 / T::betaR); // dIc/dVbc
+        d[0][0] = T::Is / T::betaF * def;                       // dIb/dVbe
+        d[0][1] = T::Is / T::betaR * der;                       // dIb/dVbc
+        d[1][0] = T::Is * def;                                  // dIc/dVbe
+        d[1][1] = -T::Is * der * (1.0 + 1.0 / T::betaR);        // dIc/dVbc
     }
 
-    // Risolve p = p0 - K·i(p) con Newton-Raphson (passo limitato)
+    // Limitazione del passo di Newton sulle giunzioni (pnjlim, come in SPICE)
+    static inline double pnjlim (double vnew, double vold)
+    {
+        constexpr double Vt = BJT::Vt;
+        static const double vcrit = Vt * std::log (Vt / (1.41421356237 * BJT::Is));
+        if (vnew > vcrit && std::abs (vnew - vold) > 2.0 * Vt)
+        {
+            if (vold > 0.0)
+            {
+                const double arg = 1.0 + (vnew - vold) / Vt;
+                vnew = arg > 0.0 ? vold + Vt * std::log (arg) : vcrit;
+            }
+            else
+                vnew = Vt * std::log (std::max (vnew / Vt, 1e-30));
+        }
+        return vnew;
+    }
+
+    // Risolve p = p0 - K·i(p) con Newton-Raphson (passo limitato sulle giunzioni)
     void newton (const std::array<double, NP>& p0, std::array<double, NP>& cur, int maxIter)
     {
         auto& p = pState;
@@ -265,10 +298,15 @@ private:
             solve4 (J);
 
             double maxStep = 0.0;
-            for (size_t r = 0; r < NP; ++r) maxStep = std::max (maxStep, std::abs (J[r][NP]));
-            const double scale = maxStep > 0.1 ? 0.1 / maxStep : 1.0;
-            for (size_t r = 0; r < NP; ++r) p[r] += scale * J[r][NP];
-            if (maxStep < 1e-10) break;
+            for (size_t r = 0; r < NP; ++r)
+            {
+                double vn = p[r] + J[r][NP];
+                vn = pnjlim (vn, p[r]);
+                vn = std::clamp (vn, -12.0, 1.5);           // fuori da qui non è fisico
+                maxStep = std::max (maxStep, std::abs (vn - p[r]));
+                p[r] = vn;
+            }
+            if (maxStep < 1e-9) break;
         }
         double dd[2][2];
         ebersMoll (p[0], p[1], cur[0], cur[1], dd);

@@ -29,7 +29,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Test del modello
-        run: ./build/Release/circuit_test
+        run: ./build/Release/circuit_test && ./build/Release/click_test
 
       - name: Firma ad-hoc e pacchetto
         run: |
