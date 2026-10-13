@@ -451,21 +451,6 @@ void PF2FuzzEditor::paint (juce::Graphics& g)
                               : ColourGradient (Colour (0xff5a1c18), led.x - 1.0f, led.y - 1.5f, Colour (0xff200605), led.x + 5.0f, led.y, true));
     g.fillEllipse (Rectangle<float> (10.0f, 10.0f).withCentre (led));
 
-    // assegnazioni CC
-    auto ccText = [this] (int idx)
-    {
-        const int cc = proc.getCCForParam (idx);
-        return proc.getLearningParam() == idx ? String ("LEARN...") : (cc >= 0 ? "CC " + String (cc) : String ("--"));
-    };
-    g.setFont (uiFont (9.0f, false));
-    g.setColour (Colour (0xff4a4d52));
-    g.drawText (ccText (1), Rectangle<float> (82.0f,  pedalY + 404.0f, 80.0f, 12.0f), Justification::centred);
-    g.drawText (ccText (0), Rectangle<float> (258.0f, pedalY + 404.0f, 80.0f, 12.0f), Justification::centred);
-    g.setColour (Colour (0xff8a8d92));
-    g.drawText (ccText (2), Rectangle<float> (88.0f, pedalY + 114.0f, 70.0f, 12.0f), Justification::centredRight);
-    g.drawText (ccText (3), Rectangle<float> (0.0f,   0.0f, 80.0f, 10.0f), Justification::centred);
-    g.drawText (ccText (4), Rectangle<float> (340.0f, 0.0f, 80.0f, 10.0f), Justification::centred);
-
     // display MIDI
     const Rectangle<float> disp (76.0f, 8.0f, 268.0f, 44.0f);
     g.setColour (Colour (0xff0a110b));
