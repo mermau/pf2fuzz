@@ -1,39 +1,135 @@
 #include "PluginEditor.h"
+#include "BinaryData.h"
+#include <cstdint>
 
 namespace
 {
-    const juce::Colour bodyTop   (0xff7d1f24);
-    const juce::Colour bodyBot   (0xff4a1013);
-    const juce::Colour cream     (0xfff1e6cc);
-    const juce::Colour stripCol  (0xff1b1b1d);
+    // palette della proposta A: nero martellato, acciaio spazzolato, targhetta rossa
+    const juce::Colour ink       (0xff18191b);   // serigrafia sull'acciaio
+    const juce::Colour cream     (0xffe4e5e7);   // testi chiari della barra di servizio
+    const juce::Colour stripCol  (0xff0e0e10);
+    const juce::Colour lineCol   (0xff3a3c40);
     const juce::Colour learnCol  (0xffffb020);
 
-    juce::Font font (float h, bool bold = true)
+    juce::Font uiFont (float h, bool bold = true)
     {
         return juce::Font (juce::FontOptions (h, bold ? juce::Font::bold : juce::Font::plain));
     }
 
     const char* displayNames[] = { "FUZZ", "VOLUME", "FOOTSWITCH", "INPUT", "OUTPUT" };
 
-    void fillChrome (juce::Graphics& g, const juce::Path& p, juce::Rectangle<float> b, float darken = 0.0f)
+    // testo con linea di base, come nella grafica di riferimento
+    void drawBaseline (juce::Graphics& g, const juce::Font& f, const juce::String& s,
+                       float x, float baseline, juce::Justification j)
     {
-        juce::ColourGradient cg (juce::Colour (0xffeeeeee).darker (darken), b.getX(), b.getY(),
-                                 juce::Colour (0xff6d6d70).darker (darken), b.getRight(), b.getBottom(), false);
-        cg.addColour (0.45, juce::Colour (0xffb9b9bc).darker (darken));
-        g.setGradientFill (cg);
-        g.fillPath (p);
+        const float w = juce::GlyphArrangement::getStringWidth (f, s);
+        if (j.testFlags (juce::Justification::horizontallyCentred)) x -= w * 0.5f;
+        else if (j.testFlags (juce::Justification::right)) x -= w;
+        juce::GlyphArrangement ga;
+        ga.addLineOfText (f, s, x, baseline);
+        ga.draw (g);
+    }
+
+    // gradiente radiale "cromo" alla maniera degli SVG della proposta
+    juce::ColourGradient chrome (juce::Point<float> c, float r, float darken = 0.0f)
+    {
+        const float d = 2.0f * r;
+        juce::ColourGradient cg (juce::Colours::white.darker (darken), c.x - 0.15f * d, c.y - 0.2f * d,
+                                 juce::Colour (0xff55595e).darker (darken), c.x - 0.15f * d + 0.85f * d, c.y - 0.2f * d, true);
+        cg.addColour (0.35, juce::Colour (0xffd6d8db).darker (darken));
+        cg.addColour (0.75, juce::Colour (0xff868a90).darker (darken));
+        return cg;
+    }
+
+    // rumore a valori (per la vernice martellata e l'acciaio spazzolato)
+    float hash2 (int x, int y)
+    {
+        uint32_t h = (uint32_t) x * 374761393u + (uint32_t) y * 668265263u;
+        h = (h ^ (h >> 13)) * 1274126177u;
+        h ^= h >> 16;
+        return (float) (h & 0xffffffu) / 16777215.0f;
+    }
+
+    float vnoise (float x, float y)
+    {
+        const int xi = (int) std::floor (x), yi = (int) std::floor (y);
+        float fx = x - (float) xi, fy = y - (float) yi;
+        fx = fx * fx * (3.0f - 2.0f * fx); fy = fy * fy * (3.0f - 2.0f * fy);
+        const float a = hash2 (xi, yi), b = hash2 (xi + 1, yi), c = hash2 (xi, yi + 1), d = hash2 (xi + 1, yi + 1);
+        return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+    }
+
+    float crinkleHeight (float u, float v)
+    {
+        return 0.55f * vnoise (u * 0.55f, v * 0.55f) + 0.3f * vnoise (u * 1.3f + 17.0f, v * 1.3f)
+             + 0.15f * vnoise (u * 3.1f, v * 3.1f + 31.0f);
+    }
+
+    // vernice nera martellata: rilievo illuminato da sinistra in alto
+    juce::Image makeCrinkle (int w, int h, float scale)
+    {
+        juce::Image img (juce::Image::RGB, juce::jmax (1, w), juce::jmax (1, h), false);
+        juce::Image::BitmapData bd (img, juce::Image::BitmapData::writeOnly);
+        const float Lx = -0.491f, Ly = -0.491f, Lz = 0.719f, e = 0.35f, depth = 2.6f;
+        for (int y = 0; y < img.getHeight(); ++y)
+            for (int x = 0; x < img.getWidth(); ++x)
+            {
+                const float u = (float) x / scale, v = (float) y / scale;
+                const float h0 = crinkleHeight (u, v);
+                const float dx = (crinkleHeight (u + e, v) - h0) / e * depth;
+                const float dy = (crinkleHeight (u, v + e) - h0) / e * depth;
+                const float n = 1.0f / std::sqrt (dx * dx + dy * dy + 1.0f);
+                const float lam = juce::jmax (0.0f, (-dx * Lx - dy * Ly + Lz) * n);
+                const auto c = (juce::uint8) juce::jlimit (0.0f, 255.0f, 12.0f + 50.0f * lam * lam);
+                bd.setPixelColour (x, y, juce::Colour (c, c, (juce::uint8) juce::jmin (255, c + 1)));
+            }
+        return img;
+    }
+
+    // acciaio spazzolato: gradiente diagonale e righe orizzontali
+    juce::Image makeSteel (int w, int h, float scale, float bw, float bh)
+    {
+        juce::Image img (juce::Image::RGB, juce::jmax (1, w), juce::jmax (1, h), false);
+        juce::Image::BitmapData bd (img, juce::Image::BitmapData::writeOnly);
+        const float st[4][2] = { { 0.0f, 236.0f }, { 0.38f, 187.0f }, { 0.6f, 222.0f }, { 1.0f, 160.0f } };
+        for (int y = 0; y < img.getHeight(); ++y)
+            for (int x = 0; x < img.getWidth(); ++x)
+            {
+                const float u = (float) x / scale, v = (float) y / scale;
+                const float t = juce::jlimit (0.0f, 1.0f, 0.5f * (u / bw + v / bh));
+                float base = st[3][1];
+                for (int i = 0; i < 3; ++i)
+                    if (t <= st[i + 1][0])
+                    {
+                        const float k = (t - st[i][0]) / (st[i + 1][0] - st[i][0]);
+                        base = st[i][1] + k * (st[i + 1][1] - st[i][1]);
+                        break;
+                    }
+                const float n = 0.6f * vnoise (u * 0.015f, v * 0.9f) + 0.4f * vnoise (u * 0.006f + 50.0f, v * 2.4f);
+                const float val = base * (1.0f - 0.20f * n);
+                bd.setPixelColour (x, y, juce::Colour ((juce::uint8) val, (juce::uint8) juce::jmin (255.0f, val + 2.0f),
+                                                       (juce::uint8) juce::jmin (255.0f, val + 5.0f)));
+            }
+        return img;
     }
 }
 
 //==============================================================================
 PedalLookAndFeel::PedalLookAndFeel()
 {
-    setColour (juce::PopupMenu::backgroundColourId, juce::Colour (0xff222224));
-    setColour (juce::PopupMenu::textColourId, cream);
-    setColour (juce::PopupMenu::highlightedBackgroundColourId, bodyTop);
-    setColour (juce::BubbleComponent::backgroundColourId, juce::Colour (0xee111111));
-    setColour (juce::BubbleComponent::outlineColourId, cream.withAlpha (0.4f));
-    setColour (juce::TooltipWindow::textColourId, cream);
+    using namespace juce;
+    setColour (PopupMenu::backgroundColourId, Colour (0xff1a1b1d));
+    setColour (PopupMenu::textColourId, cream);
+    setColour (PopupMenu::highlightedBackgroundColourId, Colour (0xff8c1218));
+    setColour (BubbleComponent::backgroundColourId, Colour (0xee111111));
+    setColour (BubbleComponent::outlineColourId, cream.withAlpha (0.4f));
+    setColour (TooltipWindow::textColourId, cream);
+    setColour (ComboBox::backgroundColourId, Colour (0xff1a1b1d));
+    setColour (ComboBox::outlineColourId, lineCol);
+    setColour (ComboBox::textColourId, cream);
+    setColour (ComboBox::arrowColourId, cream.withAlpha (0.7f));
+    setColour (TextButton::buttonColourId, Colour (0xff1a1b1d));
+    setColour (TextButton::textColourOffId, cream);
 }
 
 void PedalLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
@@ -42,50 +138,55 @@ void PedalLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w,
     using namespace juce;
     const auto b = Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
     const auto c = b.getCentre();
-    const float R = jmin (b.getWidth(), b.getHeight()) * 0.49f;
+    const float angle = startAngle + pos * (endAngle - startAngle);
 
-    // scala serigrafata
-    g.setColour (cream.withAlpha (0.85f));
+    if (w < 80)   // manopole di servizio (INPUT / OUTPUT)
+    {
+        const float k = jmin (b.getWidth(), b.getHeight()) / 34.0f;
+        g.setColour (Colour (0xff1c1c1e)); g.fillEllipse (Rectangle<float> (30 * k, 30 * k).withCentre (c));
+        g.setColour (Colour (0xff4a4d52)); g.drawEllipse (Rectangle<float> (30 * k, 30 * k).withCentre (c), 1.0f);
+        g.setColour (Colour (0xff2b2c2f)); g.fillEllipse (Rectangle<float> (18 * k, 18 * k).withCentre (c));
+        Path p; p.addRoundedRectangle (-1.2f * k, -14.0f * k, 2.4f * k, 8.0f * k, 1.2f * k);
+        g.setColour (Colour (0xffd9dbde));
+        g.fillPath (p, AffineTransform::rotation (angle).translated (c));
+        return;
+    }
+
+    const float k = jmin (b.getWidth(), b.getHeight()) / 124.0f;   // unità: SVG della proposta
+
+    // scala a punti serigrafata
+    g.setColour (Colour (0xff1b1c1e));
     for (int i = 0; i <= 10; ++i)
     {
         const float a = startAngle + (float) i / 10.0f * (endAngle - startAngle);
-        const float inner = (i % 5 == 0) ? 0.80f : 0.86f;
-        g.drawLine (Line<float> (c.getPointOnCircumference (R * inner, a), c.getPointOnCircumference (R * 0.95f, a)),
-                    i % 5 == 0 ? 2.0f : 1.2f);
+        g.fillEllipse (Rectangle<float> (5.2f * k, 5.2f * k).withCentre (c.getPointOnCircumference (56.0f * k, a)));
     }
 
-    const float kr = R * 0.70f;
-    const float angle = startAngle + pos * (endAngle - startAngle);
+    // ombra e corpo nero
+    g.setColour (Colours::black.withAlpha (0.3f));
+    g.fillEllipse (Rectangle<float> (80 * k, 80 * k).withCentre (c.translated (0, 4 * k)));
+    ColourGradient body (Colour (0xff3b3b3e), c.x - 7.6f * k, c.y - 15.2f * k,
+                         Colour (0xff050505), c.x - 7.6f * k + 60.8f * k, c.y - 15.2f * k, true);
+    body.addColour (0.7, Colour (0xff141416));
+    g.setGradientFill (body);
+    g.fillEllipse (Rectangle<float> (76 * k, 76 * k).withCentre (c));
 
-    // ombra
-    g.setColour (Colours::black.withAlpha (0.45f));
-    g.fillEllipse (Rectangle<float> (kr * 2.1f, kr * 2.1f).withCentre (c.translated (0, kr * 0.14f)));
-
-    // gonna zigrinata
-    ColourGradient skirt (Colour (0xff3d3d40), c.x, c.y - kr, Colour (0xff0d0d0e), c.x, c.y + kr, false);
-    g.setGradientFill (skirt);
-    g.fillEllipse (Rectangle<float> (kr * 2.0f, kr * 2.0f).withCentre (c));
-    g.setColour (Colours::white.withAlpha (0.09f));
-    for (int i = 0; i < 36; ++i)
+    // zigrinatura (gira con la manopola)
+    g.setColour (Colour (0xff2f3033));
+    for (int i = 0; i < 56; ++i)
     {
-        const float a = angle + (float) i * MathConstants<float>::twoPi / 36.0f;
-        g.drawLine (Line<float> (c.getPointOnCircumference (kr * 0.82f, a), c.getPointOnCircumference (kr * 0.99f, a)), 1.0f);
+        const float a = angle + (float) i * MathConstants<float>::twoPi / 56.0f;
+        g.drawLine (Line<float> (c.getPointOnCircumference (34.4f * k, a), c.getPointOnCircumference (37.6f * k, a)), 2.0f * k);
     }
 
-    // cappello
-    const float cr = kr * 0.74f;
-    ColourGradient cap (Colour (0xff57575b), c.x - cr * 0.35f, c.y - cr * 0.45f,
-                        Colour (0xff111112), c.x + cr, c.y + cr, true);
-    g.setGradientFill (cap);
-    g.fillEllipse (Rectangle<float> (cr * 2.0f, cr * 2.0f).withCentre (c));
-    g.setColour (Colours::black.withAlpha (0.6f));
-    g.drawEllipse (Rectangle<float> (cr * 2.0f, cr * 2.0f).withCentre (c), 1.0f);
+    // cappuccio cromato
+    g.setGradientFill (chrome (c, 22.0f * k));
+    g.fillEllipse (Rectangle<float> (44 * k, 44 * k).withCentre (c));
 
-    // indice
-    g.setColour (cream);
-    Path p;
-    p.addLineSegment (Line<float> (c.getPointOnCircumference (cr * 0.20f, angle), c.getPointOnCircumference (kr * 0.96f, angle)), 0.0f);
-    g.strokePath (p, PathStrokeType (jmax (2.0f, kr * 0.11f), PathStrokeType::curved, PathStrokeType::rounded));
+    // indice bianco sulla gonna
+    Path p; p.addRoundedRectangle (-2.0f * k, -37.0f * k, 4.0f * k, 14.0f * k, 2.0f * k);
+    g.setColour (Colour (0xfff1f2f3));
+    g.fillPath (p, AffineTransform::rotation (angle).translated (c));
 }
 
 //==============================================================================
@@ -102,26 +203,50 @@ void Footswitch::mouseDown (const juce::MouseEvent& e)
     Button::mouseDown (e);
 }
 
+// interruttore a pedale rotondo come sull'originale: ghiera zigrinata e pulsante cromato
 void Footswitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
     using namespace juce;
-    const auto b = getLocalBounds().toFloat().reduced (2.0f);
-    const auto c = b.getCentre().translated (0.0f, down ? 1.5f : 0.0f);
-    const float R = jmin (b.getWidth(), b.getHeight()) * 0.5f;
+    const auto b = getLocalBounds().toFloat();
+    const float k = jmin (b.getWidth(), b.getHeight()) / 84.0f;
+    const auto c0 = b.getCentre();
+    const auto c = c0.translated (0.0f, down ? 1.2f * k : 0.0f);
 
-    g.setColour (Colours::black.withAlpha (0.5f));
-    g.fillEllipse (Rectangle<float> (R * 2.0f, R * 2.0f).withCentre (b.getCentre().translated (0, R * 0.08f)));
+    g.setColour (Colours::black.withAlpha (0.45f));
+    g.fillEllipse (Rectangle<float> (62 * k, 62 * k).withCentre (c0.translated (0, 4 * k)));
 
-    Path nut; nut.addPolygon (c, 6, R * 0.97f, MathConstants<float>::pi / 6.0f);
-    fillChrome (g, nut, nut.getBounds(), down ? 0.25f : 0.0f);
+    // rondella cromata
+    g.setGradientFill (chrome (c0, 29.0f * k, 0.15f));
+    g.fillEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c0));
+    g.setColour (Colour (0xff3b3d41));
+    g.drawEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c0), 1.0f);
 
-    Path ring; ring.addEllipse (Rectangle<float> (R * 1.45f, R * 1.45f).withCentre (c));
-    fillChrome (g, ring, ring.getBounds().translated (0, R * 0.3f), 0.35f);
+    // ghiera zigrinata
+    g.setColour (Colour (0xff6e7278));
+    g.fillEllipse (Rectangle<float> (46 * k, 46 * k).withCentre (c0));
+    g.setColour (Colour (0xff3f4246));
+    for (int i = 0; i < 48; ++i)
+    {
+        const float a = (float) i * MathConstants<float>::twoPi / 48.0f;
+        g.drawLine (Line<float> (c0.getPointOnCircumference (20.5f * k, a), c0.getPointOnCircumference (23.0f * k, a)), 1.4f * k);
+    }
 
-    Path cap; cap.addEllipse (Rectangle<float> (R * 1.18f, R * 1.18f).withCentre (c));
-    fillChrome (g, cap, cap.getBounds(), down ? 0.3f : (highlighted ? -0.08f : 0.05f));
+    // pulsante
+    g.setGradientFill (chrome (c, 17.0f * k, down ? 0.3f : (highlighted ? -0.05f : 0.0f)));
+    g.fillEllipse (Rectangle<float> (34 * k, 34 * k).withCentre (c));
     g.setColour (Colours::black.withAlpha (0.35f));
-    g.drawEllipse (Rectangle<float> (R * 1.18f, R * 1.18f).withCentre (c), 1.0f);
+    g.drawEllipse (Rectangle<float> (34 * k, 34 * k).withCentre (c), 0.8f);
+}
+
+//==============================================================================
+juce::Font PF2FuzzEditor::scriptFont (float pt) const
+{
+    return juce::Font (juce::FontOptions (scriptFace).withPointHeight (pt));
+}
+
+juce::Font PF2FuzzEditor::panelFont (float pt, float tracking) const
+{
+    return juce::Font (juce::FontOptions (panelFace).withPointHeight (pt)).withExtraKerningFactor (tracking / pt);
 }
 
 //==============================================================================
@@ -129,6 +254,8 @@ PF2FuzzEditor::PF2FuzzEditor (PF2FuzzProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
     setLookAndFeel (&lnf);
+    scriptFace = juce::Typeface::createSystemTypefaceFor (BinaryData::YellowtailRegular_ttf, BinaryData::YellowtailRegular_ttfSize);
+    panelFace  = juce::Typeface::createSystemTypefaceFor (BinaryData::ArchivoBlackRegular_ttf, BinaryData::ArchivoBlackRegular_ttfSize);
 
     auto setupKnob = [this] (LearnableSlider& s, const char* id, bool small)
     {
@@ -138,7 +265,7 @@ PF2FuzzEditor::PF2FuzzEditor (PF2FuzzProcessor& p)
         s.setPopupDisplayEnabled (true, true, this);
         s.setDoubleClickReturnValue (true, (double) proc.apvts.getParameter (id)->getDefaultValue()
                                                * (small ? 48.0 : 1.0) + (small ? -24.0 : 0.0));
-        s.setMouseDragSensitivity (small ? 160 : 220);
+        s.setMouseDragSensitivity (small ? 160 : 240);
         s.setTooltip ("Clic destro: MIDI Learn");
         const int idx = proc.getLearnIndex (id);
         s.onLearnMenu = [this, idx, &s] { showLearnMenu (idx, &s); };
@@ -165,18 +292,16 @@ PF2FuzzEditor::PF2FuzzEditor (PF2FuzzProcessor& p)
     pickupBox.onChange = [this] { pickupChosen(); };
     addAndMakeVisible (pickupBox);
     pickupMenuBtn.setTooltip ("Salva i valori attuali con il nome della chitarra, o elimina una chitarra salvata");
-    pickupMenuBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2a2a2d));
-    pickupMenuBtn.setColour (juce::TextButton::textColourOffId, cream);
     pickupMenuBtn.onClick = [this] { showPickupMenu(); };
     addAndMakeVisible (pickupMenuBtn);
     rebuildPickupBox();
     for (auto* s : { &pickR, &pickL })
     {
         s->setSliderStyle (juce::Slider::LinearHorizontal);
-        s->setTextBoxStyle (juce::Slider::TextBoxLeft, false, 46, 20);
+        s->setTextBoxStyle (juce::Slider::TextBoxLeft, false, 48, 20);
         s->setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         s->setColour (juce::Slider::textBoxTextColourId, cream);
-        s->setColour (juce::Slider::trackColourId, bodyTop);
+        s->setColour (juce::Slider::trackColourId, juce::Colour (0xff6e7278));
         s->setColour (juce::Slider::thumbColourId, cream);
         addAndMakeVisible (s);
     }
@@ -215,15 +340,18 @@ void PF2FuzzEditor::resized()
     auto place = [this] (juce::Component& c, float cx, float cy, float w, float h)
     { c.setBounds (base (cx - w * 0.5f, cy - h * 0.5f, w, h).toNearestInt()); };
 
-    place (inTrim,  40.0f,  36.0f, 52.0f, 52.0f);
-    place (outTrim, 340.0f, 36.0f, 52.0f, 52.0f);
-    place (fuzz,    118.0f, 204.0f + dy, 116.0f, 116.0f);
-    place (volume,  262.0f, 204.0f + dy, 116.0f, 116.0f);
-    place (footswitch, 190.0f, 560.0f + dy, 82.0f, 82.0f);
-    pickupBox.setBounds (base (56.0f, 84.0f, 146.0f, 22.0f).toNearestInt());
-    pickupMenuBtn.setBounds (base (204.0f, 84.0f, 22.0f, 22.0f).toNearestInt());
-    pickR.setBounds (base (230.0f, 84.0f, 74.0f, 22.0f).toNearestInt());
-    pickL.setBounds (base (306.0f, 84.0f, 70.0f, 22.0f).toNearestInt());
+    // barra di servizio
+    place (inTrim,  40.0f,  25.0f, 34.0f, 34.0f);
+    place (outTrim, 380.0f, 25.0f, 34.0f, 34.0f);
+    pickupBox.setBounds     (base (62.0f,  64.0f, 168.0f, 24.0f).toNearestInt());
+    pickupMenuBtn.setBounds (base (234.0f, 64.0f, 26.0f,  24.0f).toNearestInt());
+    pickR.setBounds         (base (264.0f, 64.0f, 76.0f,  24.0f).toNearestInt());
+    pickL.setBounds         (base (342.0f, 64.0f, 72.0f,  24.0f).toNearestInt());
+
+    // pedale (coordinate della proposta A + pedalY)
+    place (footswitch, 210.0f, pedalY + 120.0f, 84.0f, 84.0f);
+    place (volume,     122.0f, pedalY + 340.0f, 124.0f, 124.0f);
+    place (fuzz,       298.0f, pedalY + 340.0f, 124.0f, 124.0f);
 
     renderBackground();
 }
@@ -233,81 +361,69 @@ void PF2FuzzEditor::renderBackground()
     using namespace juce;
     background = Image (Image::ARGB, jmax (1, getWidth()), jmax (1, getHeight()), true);
     Graphics g (background);
+
+    // texture generate alla risoluzione reale della finestra
+    const Rectangle<float> body (20.0f, pedalY + 14.0f, 380.0f, 656.0f);
+    const Rectangle<float> panel (40.0f, pedalY + 214.0f, 340.0f, 262.0f);
+    const auto crinkle = makeCrinkle (roundToInt (body.getWidth() * scale), roundToInt (body.getHeight() * scale), scale);
+    const auto steel = makeSteel (roundToInt (panel.getWidth() * scale), roundToInt (panel.getHeight() * scale), scale,
+                                  panel.getWidth(), panel.getHeight());
+
     g.addTransform (AffineTransform::scale (scale));
+    g.fillAll (Colour (0xff08080a));
 
-    g.fillAll (Colour (0xff101011));
-
-    // barra superiore (controlli di servizio, non presenti sul pedale)
+    // barra di servizio (non fa parte del pedale)
     g.setColour (stripCol);
-    g.fillRect (0.0f, 0.0f, (float) baseW, 76.0f + dy);
-    g.setColour (Colours::white.withAlpha (0.06f));
-    g.drawLine (0.0f, 76.0f + dy, (float) baseW, 76.0f + dy, 1.0f);
-    g.drawLine (10.0f, 78.0f, (float) baseW - 10.0f, 78.0f, 1.0f);
-    g.setColour (cream.withAlpha (0.6f));
-    g.setFont (font (9.0f));
-    g.drawText ("INPUT",  Rectangle<float> (10.0f, 62.0f, 60.0f, 12.0f), Justification::centred);
-    g.drawText ("OUTPUT", Rectangle<float> (310.0f, 62.0f, 60.0f, 12.0f), Justification::centred);
-    g.drawText ("PICKUP", Rectangle<float> (8.0f, 84.0f, 50.0f, 22.0f), Justification::centredLeft);
+    g.fillRect (0.0f, 0.0f, (float) baseW, 96.0f);
+    g.setColour (lineCol);
+    g.fillRect (0.0f, 95.0f, (float) baseW, 1.0f);
+    g.setColour (Colour (0xffc9ccd0));
+    g.setFont (uiFont (9.0f));
+    g.drawText ("INPUT",  Rectangle<float> (14.0f, 42.0f, 52.0f, 12.0f), Justification::centred);
+    g.drawText ("OUTPUT", Rectangle<float> (354.0f, 42.0f, 52.0f, 12.0f), Justification::centred);
+    g.drawText ("PICKUP", Rectangle<float> (14.0f, 64.0f, 46.0f, 24.0f), Justification::centredLeft);
 
-    g.addTransform (AffineTransform::translation (0.0f, dy));   // da qui in giù: il pedale
-
-    // jack laterali
-    for (auto [x, label] : { std::pair<float, const char*> { 4.0f, "OUT" }, { 362.0f, "IN" } })
+    // scatola nera martellata
+    Path bodyPath; bodyPath.addRoundedRectangle (body, 14.0f);
     {
-        Path jack; jack.addRoundedRectangle (x, 220.0f, 14.0f, 34.0f, 3.0f);
-        fillChrome (g, jack, jack.getBounds(), 0.2f);
-        g.setColour (cream.withAlpha (0.55f));
-        g.setFont (font (8.0f));
-        g.drawText (label, Rectangle<float> (x < 100.0f ? 24.0f : 330.0f, 232.0f, 26.0f, 10.0f), Justification::centred);
+        Graphics::ScopedSaveState s (g);
+        g.reduceClipRegion (bodyPath);
+        g.drawImage (crinkle, body);
     }
+    g.setColour (Colour (0xff2e2f32));
+    g.strokePath (bodyPath, PathStrokeType (1.0f));
 
-    // scatola
-    const Rectangle<float> body (16.0f, 92.0f, 348.0f, 534.0f);
-    DropShadow (Colours::black.withAlpha (0.7f), 18, { 0, 6 }).drawForRectangle (g, body.toNearestInt());
-    ColourGradient bg (bodyTop, body.getX(), body.getY(), bodyBot, body.getRight(), body.getBottom(), false);
-    g.setGradientFill (bg);
-    g.fillRoundedRectangle (body, 20.0f);
-
-    // vernice metallizzata
-    Random rnd (2026);
-    for (int i = 0; i < 900; ++i)
+    // pannello in acciaio spazzolato
+    Path panelPath; panelPath.addRoundedRectangle (panel, 5.0f);
     {
-        const float px = body.getX() + rnd.nextFloat() * body.getWidth();
-        const float py = body.getY() + rnd.nextFloat() * body.getHeight();
-        g.setColour (Colours::white.withAlpha (0.03f + rnd.nextFloat() * 0.07f));
-        g.fillRect (px, py, 1.0f, 1.0f);
+        Graphics::ScopedSaveState s (g);
+        g.reduceClipRegion (panelPath);
+        g.drawImage (steel, panel);
     }
-    ColourGradient sheen (Colours::white.withAlpha (0.10f), body.getX(), body.getY(),
-                          Colours::transparentWhite, body.getX(), body.getY() + 160.0f, false);
-    g.setGradientFill (sheen);
-    g.fillRoundedRectangle (body, 20.0f);
-    g.setColour (Colours::black.withAlpha (0.5f));
-    g.drawRoundedRectangle (body, 20.0f, 1.5f);
+    g.setColour (Colour (0xff56595e));
+    g.strokePath (panelPath, PathStrokeType (1.0f));
 
-    // viti
-    for (auto pt : { Point<float> (34, 110), Point<float> (346, 110), Point<float> (34, 608), Point<float> (346, 608) })
-    {
-        Path s; s.addEllipse (Rectangle<float> (11.0f, 11.0f).withCentre (pt));
-        fillChrome (g, s, s.getBounds(), 0.1f);
-        g.setColour (Colours::black.withAlpha (0.55f));
-        g.drawLine (Line<float> (pt.translated (-3.5f, -2.0f), pt.translated (3.5f, 2.0f)), 1.3f);
-    }
+    // serigrafia del pannello
+    g.setColour (ink);
+    drawBaseline (g, panelFont (19.0f, 1.0f), "VOL",  122.0f, pedalY + 250.0f, Justification::horizontallyCentred);
+    drawBaseline (g, panelFont (19.0f, 1.0f), "FUZZ", 298.0f, pedalY + 250.0f, Justification::horizontallyCentred);
+    drawBaseline (g, panelFont (21.0f, 3.0f), "FUZZ BOX", 210.0f, pedalY + 452.0f, Justification::horizontallyCentred);
+    drawBaseline (g, panelFont (11.0f, 1.0f), "FYN-2", 358.0f, pedalY + 452.0f, Justification::right);
 
-    // serigrafia
-    g.setColour (cream);
-    g.setFont (font (13.0f));
-    for (auto [x, label] : { std::pair<float, const char*> { 118.0f, "FUZZ" }, { 262.0f, "VOLUME" } })
-        g.drawText (label, Rectangle<float> (x - 50.0f, 264.0f, 100.0f, 16.0f), Justification::centred);
-
-    g.drawLine (60.0f, 392.0f, 320.0f, 392.0f, 1.0f);
-    g.setFont (font (58.0f));
-    g.drawText ("FYN-2", Rectangle<float> (40.0f, 396.0f, 300.0f, 62.0f), Justification::centred);
-    g.setFont (font (15.0f));
-    g.drawText ("F  U  Z  Z", Rectangle<float> (40.0f, 456.0f, 300.0f, 18.0f), Justification::centred);
-    g.drawLine (60.0f, 480.0f, 320.0f, 480.0f, 1.0f);
-    g.setFont (font (8.0f, false));
-    g.setColour (cream.withAlpha (0.7f));
-    g.drawText ("COLLATERAL EFFECTS", Rectangle<float> (40.0f, 484.0f, 300.0f, 11.0f), Justification::centred);
+    // targhetta rossa Collateral Effects
+    const Point<float> bc (210.0f, pedalY + 580.0f);
+    g.setColour (Colours::black.withAlpha (0.45f));
+    g.fillRoundedRectangle (bc.x - 104.0f, bc.y - 38.0f, 208.0f, 80.0f, 6.0f);
+    g.setGradientFill (ColourGradient (Colour (0xffd42a30), bc.x, bc.y - 42.0f, Colour (0xff8c1218), bc.x, bc.y + 38.0f, false));
+    g.fillRoundedRectangle (bc.x - 104.0f, bc.y - 42.0f, 208.0f, 80.0f, 6.0f);
+    g.setColour (Colour (0xffe6e7ea).withAlpha (0.55f));
+    g.drawRoundedRectangle (bc.x - 99.0f, bc.y - 37.0f, 198.0f, 70.0f, 4.0f, 1.2f);
+    ColourGradient chromeText (Colours::white, bc.x, bc.y - 26.0f, Colour (0xff8e9298), bc.x, bc.y + 6.0f, false);
+    chromeText.addColour (0.55, Colour (0xffcfd2d6));
+    g.setGradientFill (chromeText);
+    drawBaseline (g, scriptFont (34.0f), "Collateral", bc.x, bc.y, Justification::horizontallyCentred);
+    g.setColour (Colour (0xffeef0f2));
+    drawBaseline (g, panelFont (11.0f, 5.0f), "EFFECTS", bc.x + 2.5f, bc.y + 22.0f, Justification::horizontallyCentred);
 }
 
 //==============================================================================
@@ -317,53 +433,49 @@ void PF2FuzzEditor::paint (juce::Graphics& g)
     g.drawImageAt (background, 0, 0);
     g.addTransform (AffineTransform::scale (scale));
 
-    // LED
-    g.saveState();
-    g.addTransform (AffineTransform::translation (0.0f, dy));
-    const Point<float> led (190.0f, 340.0f);
+    // LED di stato accanto all'interruttore
+    const Point<float> led (296.0f, pedalY + 120.0f);
     const bool active = ! lastBypass;
     if (active)
     {
-        ColourGradient glow (Colour (0xffff3b30).withAlpha (0.55f), led.x, led.y,
-                             Colour (0xffff3b30).withAlpha (0.0f), led.x + 22.0f, led.y, true);
+        ColourGradient glow (Colour (0xffff3b30).withAlpha (0.5f), led.x, led.y,
+                             Colour (0xffff3b30).withAlpha (0.0f), led.x + 20.0f, led.y, true);
         g.setGradientFill (glow);
-        g.fillEllipse (Rectangle<float> (44.0f, 44.0f).withCentre (led));
+        g.fillEllipse (Rectangle<float> (40.0f, 40.0f).withCentre (led));
     }
-    g.setColour (Colour (0xff1a1a1a));
+    g.setGradientFill (chrome (led, 8.0f));
     g.fillEllipse (Rectangle<float> (16.0f, 16.0f).withCentre (led));
-    g.setColour (active ? Colour (0xffff4a3d) : Colour (0xff4a1a1a));
-    g.fillEllipse (Rectangle<float> (11.0f, 11.0f).withCentre (led));
-    g.setColour (Colours::white.withAlpha (active ? 0.7f : 0.15f));
-    g.fillEllipse (Rectangle<float> (3.5f, 3.5f).withCentre (led.translated (-2.0f, -2.0f)));
+    g.setColour (Colour (0xff3d4044));
+    g.drawEllipse (Rectangle<float> (16.0f, 16.0f).withCentre (led), 0.8f);
+    g.setGradientFill (active ? ColourGradient (Colour (0xffffb3a8), led.x - 1.0f, led.y - 1.5f, Colour (0xff7a0d08), led.x + 5.0f, led.y, true)
+                              : ColourGradient (Colour (0xff5a1c18), led.x - 1.0f, led.y - 1.5f, Colour (0xff200605), led.x + 5.0f, led.y, true));
+    g.fillEllipse (Rectangle<float> (10.0f, 10.0f).withCentre (led));
 
     // assegnazioni CC
-    g.setFont (font (9.0f, false));
     auto ccText = [this] (int idx)
     {
         const int cc = proc.getCCForParam (idx);
         return proc.getLearningParam() == idx ? String ("LEARN...") : (cc >= 0 ? "CC " + String (cc) : String ("--"));
     };
-    g.setColour (cream.withAlpha (0.55f));
-    const float xs[] = { 118.0f, 262.0f };
-    for (int i = 0; i < 2; ++i)
-        g.drawText (ccText (i), Rectangle<float> (xs[i] - 40.0f, 280.0f, 80.0f, 12.0f), Justification::centred);
-    g.drawText (ccText (2), Rectangle<float> (238.0f, 554.0f, 80.0f, 12.0f), Justification::centredLeft);
-    g.restoreState();
-    g.setFont (font (9.0f, false));
-    g.setColour (cream.withAlpha (0.45f));
-    g.drawText (ccText (3), Rectangle<float> (0.0f, 4.0f, 80.0f, 10.0f), Justification::centred);
-    g.drawText (ccText (4), Rectangle<float> (300.0f, 4.0f, 80.0f, 10.0f), Justification::centred);
+    g.setFont (uiFont (9.0f, false));
+    g.setColour (Colour (0xff4a4d52));
+    g.drawText (ccText (1), Rectangle<float> (82.0f,  pedalY + 404.0f, 80.0f, 12.0f), Justification::centred);
+    g.drawText (ccText (0), Rectangle<float> (258.0f, pedalY + 404.0f, 80.0f, 12.0f), Justification::centred);
+    g.setColour (Colour (0xff8a8d92));
+    g.drawText (ccText (2), Rectangle<float> (88.0f, pedalY + 114.0f, 70.0f, 12.0f), Justification::centredRight);
+    g.drawText (ccText (3), Rectangle<float> (0.0f,   0.0f, 80.0f, 10.0f), Justification::centred);
+    g.drawText (ccText (4), Rectangle<float> (340.0f, 0.0f, 80.0f, 10.0f), Justification::centred);
 
     // display MIDI
-    const Rectangle<float> disp (86.0f, 16.0f, 208.0f, 42.0f);
-    g.setColour (Colour (0xff0a0f0a));
-    g.fillRoundedRectangle (disp, 5.0f);
-    g.setColour (Colours::white.withAlpha (0.08f));
-    g.drawRoundedRectangle (disp, 5.0f, 1.0f);
+    const Rectangle<float> disp (76.0f, 8.0f, 268.0f, 44.0f);
+    g.setColour (Colour (0xff0a110b));
+    g.fillRoundedRectangle (disp, 4.0f);
+    g.setColour (Colour (0xff23262a));
+    g.drawRoundedRectangle (disp, 4.0f, 1.0f);
 
     const Colour lcd (0xff9be08a);
     g.setColour (lcd);
-    g.setFont (font (10.0f));
+    g.setFont (uiFont (10.0f));
     String line1 = "MIDI", line2;
     const int learn = proc.getLearningParam();
     if (learn >= 0)
@@ -381,10 +493,10 @@ void PF2FuzzEditor::paint (juce::Graphics& g)
     }
     else
         line2 = "clic destro su un comando: Learn";
-    g.drawText (line1, disp.reduced (8.0f, 3.0f).removeFromTop (15.0f), Justification::centredLeft);
-    g.setFont (font (9.5f, false));
-    g.setColour (lcd.withAlpha (0.85f));
-    g.drawText (line2, disp.reduced (8.0f, 3.0f).removeFromBottom (15.0f), Justification::centredLeft);
+    g.drawText (line1, disp.reduced (10.0f, 5.0f).removeFromTop (16.0f), Justification::centredLeft);
+    g.setFont (uiFont (10.0f, false));
+    g.setColour (Colour (0xff8fcf80));
+    g.drawText (line2, disp.reduced (10.0f, 5.0f).removeFromBottom (16.0f), Justification::centredLeft);
 }
 
 void PF2FuzzEditor::paintOverChildren (juce::Graphics& g)

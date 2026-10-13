@@ -135,3 +135,9 @@ del carico è un'approssimazione; l'hFE reale varia da esemplare a esemplare
 (160–320 nella classe F), e il modello ne usa il valore centrale; il
 verso del FUZZ (orario = più armoniche) è dedotto dal modello. Tutti i valori sono in
 `struct Components` e `struct BJT` dentro `Source/FuzzCircuit.h`.
+
+## Grafica e caratteri
+
+Interfaccia ispirata al FY-2 originale (vernice nera martellata, pannello in acciaio, targhetta
+rossa), con LED di stato aggiunto. Caratteri inclusi: Archivo Black (SIL Open Font License) e
+Yellowtail (Apache 2.0), licenze in `resources/fonts/`.

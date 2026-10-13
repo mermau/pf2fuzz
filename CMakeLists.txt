@@ -39,6 +39,10 @@ juce_add_plugin(FYN2
     MICROPHONE_PERMISSION_TEXT "FYN-2 usa l'ingresso della scheda audio per elaborare il segnale della chitarra."
     COPY_PLUGIN_AFTER_BUILD TRUE)
 
+juce_add_binary_data(FYN2Fonts SOURCES
+    resources/fonts/Yellowtail-Regular.ttf
+    resources/fonts/ArchivoBlack-Regular.ttf)
+
 target_sources(FYN2 PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp)
@@ -49,7 +53,7 @@ target_compile_definitions(FYN2 PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0)
 
 target_link_libraries(FYN2
-    PRIVATE juce::juce_audio_utils juce::juce_dsp
+    PRIVATE FYN2Fonts juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 
 # Test del modello DSP (senza JUCE)

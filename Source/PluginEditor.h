@@ -47,8 +47,9 @@ public:
     void paintOverChildren (juce::Graphics&) override;
     void resized() override;
 
-    static constexpr int baseW = 380, baseH = 680;
-    static constexpr float dy = 40.0f;   // spostamento del pedale sotto la barra superiore
+    // coordinate di progetto (proposta grafica A): barra di servizio 0-96, pedale sotto
+    static constexpr int baseW = 420, baseH = 780;
+    static constexpr float pedalY = 96.0f;
 
 private:
     void timerCallback() override;
@@ -86,6 +87,9 @@ private:
     std::unique_ptr<SA> pickRA, pickLA;
     int lastPickup = -1;
 
+    juce::Typeface::Ptr scriptFace, panelFace;
+    juce::Font scriptFont (float pt) const;
+    juce::Font panelFont (float pt, float tracking = 0.0f) const;
     juce::TooltipWindow tooltips { this, 700 };
     juce::Image background;
     float scale = 1.0f;
