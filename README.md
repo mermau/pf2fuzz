@@ -1,8 +1,8 @@
-# PF-2 Fuzz — emulazione fisica del Shin-Ei Companion Fuzz FY-2 (VST3 / AU / Standalone)
+# Collateral Effects FYN-2 — emulazione fisica del Shin-ei Companion FUZZ BOX FY-2 (VST3 / AU / Standalone)
 
-Plugin in C++17 con JUCE 8. Riferimento: schema GGG "SECF" (replica del FY-2, con
-tensioni misurate ai transistor), privato delle aggiunte moderne (booster, LED,
-resistenza anti-pop). La topologia coincide con il kit FuzzDog FY2 V3 senza SCOOP né boost.
+Plugin in C++17 con JUCE 8. Riferimento: lo schema dell'originale Shin-ei FY-2 (transistor
+NEC 2SC536 classe F, pot Cosmos B50K), che nei valori coincide con la replica GGG "SECF" priva
+delle aggiunte moderne e con il kit FuzzDog FY2 V3 senza SCOOP né boost.
 
 ## Comandi
 
@@ -42,8 +42,8 @@ prima del fuzz. Scegli il tipo della chitarra che stai suonando:
 **Le mie chitarre**: con il pulsante "…" accanto al menu salvi i valori attuali con il nome
 della chitarra ("Tele", "SG"...) e li richiami poi dal menu, nella sezione *Le mie chitarre*.
 Salvare con un nome già esistente aggiorna quella chitarra; dallo stesso pulsante si elimina.
-L'elenco è condiviso da tutti i progetti: si trova in `~/Library/Application Support/PF-2 Fuzz/`
-(macOS) o in `%APPDATA%\PF-2 Fuzz\` (Windows). Ogni progetto ricorda quale chitarra era scelta.
+L'elenco è condiviso da tutti i progetti: si trova in `~/Library/Application Support/Collateral Effects/FYN-2/`
+(macOS) o in `%APPDATA%\Collateral Effects\FYN-2\` (Windows). Ogni progetto ricorda quale chitarra era scelta. Le chitarre salvate con la versione "PF-2 Fuzz" vengono recuperate in automatico.
 Se modifichi R o L di una chitarra salvata, il menu mostra "Personalizzato" finché non la salvi di nuovo.
 
 Il modello include anche la capacità del cavo (470 pF). La resistenza in continua dei pick-up
@@ -56,16 +56,17 @@ Ogni modifica su `main` viene compilata automaticamente da GitHub Actions su mac
 (universal binary: M1–M4 e Intel).
 
 1. Nel repository apri **Actions → Build macOS**, scegli l'ultima esecuzione riuscita e scarica
-   l'artefatto **PF2Fuzz-macOS** (serve essere collegati a GitHub). Per una versione "ufficiale"
+   l'artefatto **FYN2-macOS** (serve essere collegati a GitHub). Per una versione "ufficiale"
    crea un tag `v1.0.0`: la build compare anche in **Releases**, scaricabile senza login.
-2. Estrai lo zip (contiene a sua volta `PF2Fuzz-macOS.zip`, estrai anche quello).
+2. Estrai lo zip (contiene a sua volta `FYN2-macOS.zip`, estrai anche quello).
 3. Il plugin non è firmato con un certificato Apple Developer, quindi macOS lo blocca al primo
-   avvio. Apri il Terminale e trascina dentro la cartella `PF-2 Fuzz` dopo questo comando:
+   avvio. Apri il Terminale e trascina dentro la cartella `FYN-2` dopo questo comando:
    ```
    xattr -dr com.apple.quarantine 
    ```
-   poi fai doppio clic su **Installa PF-2 Fuzz.command**. Copia VST3 e AU nelle cartelle dei
-   plugin dell'utente e l'app Standalone in Applicazioni.
+   poi fai doppio clic su **Installa FYN-2.command** (chiede la password di amministratore).
+   Copia VST3 e AU in `/Library/Audio/Plug-Ins/` e l'app Standalone in Applicazioni, e
+   rimuove la vecchia versione "PF-2 Fuzz".
 4. Riavvia la DAW (in Logic: se non compare, *Plug-in Manager → Reimposta e riscansiona*).
 
 **Standalone**: al primo avvio macOS chiede il permesso di usare il microfono (cioè gli ingressi
@@ -99,7 +100,7 @@ Test del modello: `build/circuit_test` (punto di lavoro, distorsione al variare 
 ## Usare la KeyLab
 
 - **Ableton Live**: metti il plugin sulla traccia audio della chitarra; crea una traccia
-  MIDI con ingresso KeyLab e in *MIDI To* scegli la traccia della chitarra → "PF-2 Fuzz".
+  MIDI con ingresso KeyLab e in *MIDI To* scegli la traccia della chitarra → "FYN-2".
   In alternativa, usa la mappatura MIDI di Live (Cmd/Ctrl+M) sui parametri del plugin.
 - **Logic Pro**: l'AU è un normale effetto (Audio FX), da inserire sulla traccia audio della
   chitarra. Non riceve CC direttamente: per la KeyLab usa l'assegnazione controller di Logic
@@ -114,9 +115,14 @@ Il circuito viene risolto per intero a ogni campione, senza curve di distorsione
 
 - **Analisi nodale** a 12 nodi con tutti i componenti (C1–C8, R1–R6, R9, FUZZ, VOLUME,
   carico dell'ampli 1 MΩ, alimentazione 9 V); condensatori con la regola dei trapezi.
-- **Q1 e Q2 con il modello di Ebers-Moll** (β diretto 38, inverso 2, Is 1e-14, capacità Cμ),
-  risolti con Newton-Raphson sulle 4 tensioni di giunzione. Il punto di lavoro calcolato
-  (Q1 6.64 V, Q2 2.03 V) coincide con le misure GGG (6.6 V e 2.0 V).
+- **Q1 e Q2 con il modello di Ebers-Moll**, parametri del NEC 2SC536 classe F montato
+  sull'originale (marcatura "C536 F7G"): hFE 226, centro della classe 160–320 del datasheet;
+  Cob 3.5 pF. Risolti con Newton-Raphson sulle 4 tensioni di giunzione. Punto di lavoro
+  calcolato: Q1 3.2 V, Q2 0.9 V. Le tensioni misurate da GGG (6.6 V e 2.0 V) si riferiscono
+  alla loro replica con transistor a basso guadagno: con gli originali il FY-2 è più
+  "affamato" e distorce di più, come osserva la stessa GGG ("più hFE, fuzz più cattivo").
+- **Pot Cosmos B50K**: nella siglatura giapponese "B" indica la curva lineare, già usata
+  per FUZZ e VOL.
 - Polarizzazione, clipping asimmetrico, spostamento del bias per la carica di C3, somma in
   controfase dei due stadi sul FUZZ e carico della rete d'uscita sui collettori emergono
   dalla simulazione stessa.
@@ -125,7 +131,7 @@ Il circuito viene risolto per intero a ogni campione, senza curve di distorsione
 
 **Limiti noti**: i valori dei pick-up sono tipici, non misurati sulle tue chitarre; il segnale
 registrato dalla scheda contiene già la risonanza del pick-up a vuoto, quindi la ricostruzione
-del carico è un'approssimazione; i transistor originali C536F7G non
-sono documentati, i parametri sono stati scelti per riprodurre le tensioni misurate; il
+del carico è un'approssimazione; l'hFE reale varia da esemplare a esemplare
+(160–320 nella classe F), e il modello ne usa il valore centrale; il
 verso del FUZZ (orario = più armoniche) è dedotto dal modello. Tutti i valori sono in
 `struct Components` e `struct BJT` dentro `Source/FuzzCircuit.h`.

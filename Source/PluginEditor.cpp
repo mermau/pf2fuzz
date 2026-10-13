@@ -301,13 +301,13 @@ void PF2FuzzEditor::renderBackground()
 
     g.drawLine (60.0f, 392.0f, 320.0f, 392.0f, 1.0f);
     g.setFont (font (58.0f));
-    g.drawText ("PF-2", Rectangle<float> (40.0f, 396.0f, 300.0f, 62.0f), Justification::centred);
+    g.drawText ("FYN-2", Rectangle<float> (40.0f, 396.0f, 300.0f, 62.0f), Justification::centred);
     g.setFont (font (15.0f));
     g.drawText ("F  U  Z  Z", Rectangle<float> (40.0f, 456.0f, 300.0f, 18.0f), Justification::centred);
     g.drawLine (60.0f, 480.0f, 320.0f, 480.0f, 1.0f);
     g.setFont (font (8.0f, false));
     g.setColour (cream.withAlpha (0.7f));
-    g.drawText ("PARMA", Rectangle<float> (40.0f, 484.0f, 300.0f, 11.0f), Justification::centred);
+    g.drawText ("COLLATERAL EFFECTS", Rectangle<float> (40.0f, 484.0f, 300.0f, 11.0f), Justification::centred);
 }
 
 //==============================================================================

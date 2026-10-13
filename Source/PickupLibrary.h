@@ -15,11 +15,23 @@ public:
     PickupLibrary()
     {
         juce::PropertiesFile::Options o;
-        o.applicationName     = "PF-2 Fuzz";
-        o.folderName          = "PF-2 Fuzz";
+        o.applicationName     = "FYN-2";
+        o.folderName          = "Collateral Effects/FYN-2";
         o.filenameSuffix      = ".settings";
         o.osxLibrarySubFolder = "Application Support";
         file = std::make_unique<juce::PropertiesFile> (o);
+
+        // recupera le chitarre salvate con la versione precedente ("PF-2 Fuzz")
+        if (! file->containsKey ("pickups"))
+        {
+            auto old = o; old.applicationName = old.folderName = "PF-2 Fuzz";
+            juce::PropertiesFile previous (old);
+            if (auto xml = previous.getXmlValue ("pickups"))
+            {
+                file->setValue ("pickups", xml.get());
+                file->saveIfNeeded();
+            }
+        }
         reload();
     }
 

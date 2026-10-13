@@ -1,8 +1,9 @@
 /*
   FuzzCircuit.h  —  modello fisico del Shin-Ei Companion Fuzz FY-2
   ---------------------------------------------------------------------------
-  Riferimento: schema GGG "SECF" (replica FY-2) senza le aggiunte moderne
-  (booster, LED, R11 anti-pop); topologia identica al kit FuzzDog FY2 V3.
+  Riferimento: schema dell'originale Shin-ei Companion FUZZ BOX FY-2 (identico,
+  nei valori, allo schema GGG "SECF" privato delle aggiunte moderne: booster,
+  LED, R11 anti-pop). Pot FUZZ e VOL: Cosmos B50K (B = lineare).
   Indipendente da JUCE. Ingresso e uscita in VOLT.
 
   L'intero circuito è risolto ad ogni campione:
@@ -13,8 +14,8 @@
    - le non linearità sono ridotte alle 4 tensioni di giunzione (metodo "K" /
      DK): ad ogni campione si risolve un sistema 4×4 con Newton-Raphson.
 
-  Così emergono da sole, senza costanti empiriche: la polarizzazione (Q1 ≈ 6.6 V,
-  Q2 ≈ 2.0 V come nelle misure GGG), il clipping asimmetrico, lo spostamento di
+  Così emergono da sole, senza costanti empiriche: la polarizzazione (con i
+  2SC536F originali Q1 ≈ 3.2 V, Q2 ≈ 0.9 V), il clipping asimmetrico, lo spostamento di
   polarizzazione per la carica di C3 (gating), l'interazione tra gli stadi e il
   carico della rete d'uscita sui collettori.
 
@@ -44,7 +45,7 @@ struct Components
     static constexpr double C4 = 2.2e-9, C5 = 3.3e-9, Rfuzz = 50e3;
     static constexpr double C6 = 1e-9,   R5 = 10e3,  R6 = 15e3,   C7 = 100e-9;
     static constexpr double Rvol = 50e3, Rload = 1e6;
-    static constexpr double Cmu = 4e-12;    // capacità base-collettore dei transistor
+    static constexpr double Cmu = 3.5e-12;  // Cob del 2SC536 (datasheet, Vce 6 V)
 };
 
 // Pick-up: resistenza in continua e induttanza (valori tipici misurati)
@@ -57,11 +58,13 @@ struct Pickup
     static constexpr Pickup humbucker()  { return { 10e3, 5.0 }; }
 };
 
-// Transistor NPN a basso guadagno (C536F7G originali non reperibili): parametri
-// scelti per riprodurre le tensioni misurate da GGG
+// Transistor originali: NEC 2SC536, marcatura "C536 F7G" = classe di guadagno F
+// (hFE 160-320 da datasheet); si usa il centro geometrico della classe.
+// Nota: le tensioni misurate da GGG (Q1 6.6 V, Q2 2.0 V) valgono per la loro
+// replica con transistor a basso guadagno, non per l'originale.
 struct BJT
 {
-    static constexpr double Is = 1e-14, betaF = 38.0, betaR = 2.0, Vt = 0.02585;
+    static constexpr double Is = 1e-14, betaF = 226.0, betaR = 4.0, Vt = 0.02585;
 };
 
 //==============================================================================
