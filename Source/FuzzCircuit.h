@@ -125,6 +125,24 @@ public:
         build (true);
     }
 
+    // alimentazione (V): batteria 4.5-9.6 V o alimentatore 9 V. Va chiamata a frequenza di
+    // controllo con un valore già smussato: un salto brusco sarebbe un transitorio reale
+    void setSupply (double volts)
+    {
+        volts = std::clamp (volts, 1.0, 12.0);
+        if (std::abs (volts - vcc) < 1e-4) return;
+        vcc = volts;
+        build (true);
+    }
+    double getSupply() const { return vcc; }
+
+    // guadagno (hFE) dei due transistor: classe F del 2SC536 = 160-320
+    void setHfe (double q1, double q2)
+    {
+        beta1 = std::clamp (q1, 10.0, 2000.0);
+        beta2 = std::clamp (q2, 10.0, 2000.0);
+    }
+
     // a frequenza di controllo, valori 0..1 già smussati
     void setControls (float fuzz, float vol)
     {
@@ -196,10 +214,10 @@ private:
         { X, VO, Components::C6 },   { M, GND, Components::C7 },  { K2, B2, Components::Cmu } } };
 
     // tensione ai capi di un condensatore dato il vettore dei nodi
-    static double capVoltage (const Cap& c, const std::array<double, NN>& vn)
+    double capVoltage (const Cap& c, const std::array<double, NN>& vn) const
     {
         const double vi = c.i >= 0 ? vn[(size_t) c.i] : 0.0;
-        const double vj = c.j >= 0 ? vn[(size_t) c.j] : (c.j == RAIL ? Components::Vcc : 0.0);
+        const double vj = c.j >= 0 ? vn[(size_t) c.j] : (c.j == RAIL ? vcc : 0.0);
         return vi - vj;
     }
 
@@ -215,7 +233,7 @@ private:
             if (i >= 0) A[(size_t) i][(size_t) i] += g;
             if (j >= 0) A[(size_t) j][(size_t) j] += g;
             if (i >= 0 && j >= 0) { A[(size_t) i][(size_t) j] -= g; A[(size_t) j][(size_t) i] -= g; }
-            if (j == RAIL && i >= 0) bConst[(size_t) i] += g * C::Vcc;
+            if (j == RAIL && i >= 0) bConst[(size_t) i] += g * vcc;
         };
         auto addR = [&] (int i, int j, double r) { addG (i, j, 1.0 / std::max (r, 1.0)); };
 
@@ -260,7 +278,7 @@ private:
 
         // termine noto: b = b0 + Bu·vin + Bx·x  (Bx: ±1 sui nodi di ogni elemento reattivo)
         std::array<double, NN> b0 = bConst;
-        for (auto& c : caps) if (c.j == RAIL && c.i >= 0) b0[(size_t) c.i] += c.geq * C::Vcc;
+        for (auto& c : caps) if (c.j == RAIL && c.i >= 0) b0[(size_t) c.i] += c.geq * vcc;
         auto bxCol = [this] (size_t k, size_t node) -> double
         {
             if (k < (size_t) NC)
@@ -313,7 +331,7 @@ private:
                 return 2.0 * indG * (nodeVal ((size_t) PU) - nodeVal ((size_t) IN));
             };
             const double selfTerm = r < (size_t) NC ? -1.0 : 1.0;            // -J (condensatori), +H (induttanza)
-            const double railTerm = (r < (size_t) NC && caps[r].j == RAIL) ? -2.0 * caps[r].geq * C::Vcc : 0.0;
+            const double railTerm = (r < (size_t) NC && caps[r].j == RAIL) ? -2.0 * caps[r].geq * vcc : 0.0;
             d0[r] = applyRow ([&] (size_t n) { return m0[n]; }) + railTerm;
             bu[r] = applyRow ([&] (size_t n) { return mu[n]; });
             for (size_t k = 0; k < NS; ++k)
@@ -344,15 +362,15 @@ private:
     }
 
     // Ebers-Moll: correnti e derivate di un transistor (Ib, Ic) rispetto a (Vbe, Vbc)
-    static inline void ebersMoll (double vbe, double vbc, double& ib, double& ic, double d[2][2])
+    static inline void ebersMoll (double vbe, double vbc, double betaF, double& ib, double& ic, double d[2][2])
     {
         using T = BJT;
         double ef, def, er, der;
         junctionExp (vbe, ef, def);
         junctionExp (vbc, er, der);
         ic = T::Is * (ef - er) - T::Is / T::betaR * (er - 1.0);
-        ib = T::Is / T::betaF * (ef - 1.0) + T::Is / T::betaR * (er - 1.0);
-        d[0][0] = T::Is / T::betaF * def;                       // dIb/dVbe
+        ib = T::Is / betaF * (ef - 1.0) + T::Is / T::betaR * (er - 1.0);
+        d[0][0] = T::Is / betaF * def;                          // dIb/dVbe
         d[0][1] = T::Is / T::betaR * der;                       // dIb/dVbc
         d[1][0] = T::Is * def;                                  // dIc/dVbe
         d[1][1] = -T::Is * der * (1.0 + 1.0 / T::betaR);        // dIc/dVbc
@@ -383,8 +401,8 @@ private:
         for (int it = 0; it < maxIter; ++it)
         {
             double d1[2][2], d2[2][2];
-            ebersMoll (p[0], p[1], cur[0], cur[1], d1);
-            ebersMoll (p[2], p[3], cur[2], cur[3], d2);
+            ebersMoll (p[0], p[1], beta1, cur[0], cur[1], d1);
+            ebersMoll (p[2], p[3], beta2, cur[2], cur[3], d2);
 
             std::array<double, NP> F {};
             for (size_t r = 0; r < NP; ++r)
@@ -431,8 +449,8 @@ private:
             }
         }
         double dd[2][2];
-        ebersMoll (p[0], p[1], cur[0], cur[1], dd);
-        ebersMoll (p[2], p[3], cur[2], cur[3], dd);
+        ebersMoll (p[0], p[1], beta1, cur[0], cur[1], dd);
+        ebersMoll (p[2], p[3], beta2, cur[2], cur[3], dd);
     }
 
     static void solve4 (double J[NP][NP + 1])
@@ -526,6 +544,7 @@ private:
     };
 
     double fs = 192000.0, fuzzPos = 0.7, volPos = 0.5, gIn = 0.0, indG = 0.0;
+    double vcc = Components::Vcc, beta1 = BJT::betaF, beta2 = BJT::betaF;
     Pickup pickup = Pickup::singleCoil();
     std::array<std::array<double, NN>, NN> Ainv {};
     std::array<std::array<double, NN>, NP> P {};

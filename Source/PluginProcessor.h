@@ -16,6 +16,27 @@ namespace ParamIDs
     inline constexpr const char* pickup = "pickup";
     inline constexpr const char* pickupR = "pickupR";
     inline constexpr const char* pickupL = "pickupL";
+    // pannello "interno"
+    inline constexpr const char* supply  = "supply";    // Batteria / Alimentatore 9 V
+    inline constexpr const char* battery = "battery";   // tensione della batteria (V)
+    inline constexpr const char* hfeQ1   = "hfeQ1";
+    inline constexpr const char* hfeQ2   = "hfeQ2";
+}
+
+// Curva di scarica tipica di una 9 V alcalina: carica residua (0..1) in funzione della tensione.
+// Sotto 5.4 V (0.9 V per elemento) la batteria è esaurita: restituisce valori negativi.
+namespace Battery
+{
+    inline constexpr double fullV = 9.6, emptyV = 5.4, minV = 4.5, nominalV = 9.0, dcV = 9.0;
+    inline double chargeFromVolts (double v)
+    {
+        static const double V[] = { 5.4, 6.6, 7.4, 8.1, 8.7, 9.1, 9.6 };
+        static const double C[] = { 0.0, 0.10, 0.25, 0.50, 0.75, 0.90, 1.0 };
+        if (v <= V[0]) return (v - emptyV) / (emptyV - minV) * 0.25;   // oltre la scarica
+        for (int i = 0; i < 6; ++i)
+            if (v <= V[i + 1]) return C[i] + (v - V[i]) / (V[i + 1] - V[i]) * (C[i + 1] - C[i]);
+        return 1.0;
+    }
 }
 
 //==============================================================================
@@ -54,7 +75,7 @@ public:
 
     //==========================================================================
     // MIDI CC: mappa e MIDI Learn (thread-safe, senza lock)
-    static constexpr int numLearnable = 5;
+    static constexpr int numLearnable = 9;
     static const std::array<const char*, numLearnable> learnableIDs;
 
     int  getLearnIndex (const juce::String& paramID) const;
@@ -77,7 +98,7 @@ private:
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::DryWetMixer<float> mixer { 256 };
 
-    juce::SmoothedValue<float> fuzzSm, volSm, inGainSm, outGainSm;
+    juce::SmoothedValue<float> fuzzSm, volSm, inGainSm, outGainSm, vccSm, hfe1Sm, hfe2Sm;
 
     std::atomic<float>* fuzzRaw   = nullptr;
     std::atomic<float>* volRaw    = nullptr;
@@ -87,6 +108,11 @@ private:
     std::atomic<float>* pickupRaw = nullptr;
     std::atomic<float>* pickRRaw  = nullptr;
     std::atomic<float>* pickLRaw  = nullptr;
+    std::atomic<float>* supplyRaw = nullptr;
+    std::atomic<float>* batteryRaw = nullptr;
+    std::atomic<float>* hfe1Raw   = nullptr;
+    std::atomic<float>* hfe2Raw   = nullptr;
+    float targetSupply() const;
     pf2::Pickup currentPickup() const;
     juce::AudioParameterBool* bypassParam = nullptr;
 

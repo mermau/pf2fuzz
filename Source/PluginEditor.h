@@ -12,6 +12,10 @@ public:
     PedalLookAndFeel();
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos,
                            float startAngle, float endAngle, juce::Slider&) override;
+    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override
+    {
+        return juce::Font (juce::FontOptions (juce::jmin (15.0f, (float) buttonHeight * 0.34f), juce::Font::bold));
+    }
 };
 
 //==============================================================================
@@ -34,6 +38,50 @@ public:
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override { if (! e.mods.isPopupMenu()) Button::mouseUp (e); }
+};
+
+// Deviatore a slitta BATTERIA / ALIMENTATORE del pannello interno
+class SupplySwitch : public juce::Button
+{
+public:
+    SupplySwitch() : juce::Button ("Supply") { setClickingTogglesState (true); }
+    std::function<void()> onLearnMenu;
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseUp (const juce::MouseEvent& e) override { if (! e.mods.isPopupMenu()) Button::mouseUp (e); }
+};
+
+//==============================================================================
+// Pannello "interno" (come aprire il fondo del pedale): alimentazione e transistor
+class InteriorPanel : public juce::Component, private juce::Timer
+{
+public:
+    InteriorPanel (PF2FuzzProcessor&, juce::Typeface::Ptr panelFace,
+                   std::function<void (int, juce::Component*)> learnMenu);
+    ~InteriorPanel() override = default;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    juce::Component* controlFor (int paramIndex);
+    std::function<void()> onClose;
+
+    static constexpr float baseW = 380.0f, baseH = 656.0f;
+
+private:
+    void timerCallback() override;
+    juce::Font font (float pt, float tracking = 0.0f) const;
+    juce::Rectangle<int> area (float x, float y, float w, float h) const;
+    void resetToOriginal();
+
+    PF2FuzzProcessor& proc;
+    juce::Typeface::Ptr face;
+    SupplySwitch supply;
+    LearnableSlider charge, hfe1, hfe2;
+    juce::TextButton resetBtn { "VALORI ORIGINALI" }, closeBtn { "CHIUDI" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> supplyA;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> chargeA, hfe1A, hfe2A;
+    float k = 1.0f, lastV = -1.0f, lastH1 = -1.0f, lastH2 = -1.0f;
+    bool lastDC = false;
 };
 
 //==============================================================================
@@ -81,6 +129,8 @@ private:
     std::unique_ptr<SA> fuzzA, volA, inA, outA;
     std::unique_ptr<BA> bypassA;
     juce::TextButton pickupMenuBtn { juce::String::fromUTF8 ("\xe2\x80\xa6") };
+    juce::TextButton interiorBtn { "INTERNO" };
+    std::unique_ptr<InteriorPanel> interior;
     PickupLibrary library;
     std::unique_ptr<juce::AlertWindow> nameDialog;
     int lastLibVersion = -1;

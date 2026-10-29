@@ -25,6 +25,25 @@ Il pedale è mono: il plugin prende la chitarra da qualunque ingresso arrivi (si
 La mappatura è salvata nel progetto. Il footswitch commuta alla pressione: imposta il
 pulsante in modalità *Gate/Momentary* in Arturia MIDI Control Center.
 
+## Interno (pulsante INTERNO nella barra superiore)
+
+Come aprire il fondo del pedale. Tutti i comandi sono automatizzabili e assegnabili via MIDI
+(clic destro → MIDI Learn); "VALORI ORIGINALI" riporta batteria a 9 V e transistor a hFE 226.
+
+- **BATT / DC**: l'originale funzionava solo a batteria; DC simula un alimentatore stabilizzato
+  da 9 V (comodità, non fedeltà).
+- **CARICA**: tensione della batteria da 9,6 V (nuova) a 5,4 V (esaurita, 0,9 V per elemento),
+  con la curva di scarica tipica di una 9 V alcalina; il pannello mostra tensione e carica
+  residua. La zona rossa, fino a 4,5 V, va oltre la scarica, per sonorità "strane".
+  Cosa cambia: il FY-2 si autopolarizza, quindi non "sputacchia" come un Fuzz Face: scendendo
+  di tensione il volume cala (−7 dB a 5,4 V, −9 dB a 4,5 V), il suono si comprime e le armoniche
+  pari crescono molto (da +4 a +13 dB sulle dispari suonando forte): fuzz più caldo,
+  asimmetrico, quasi ottavato. Sotto i 4,5 V torna simmetrico e cala soltanto: per questo il
+  comando si ferma lì.
+- **hFE Q1 / hFE Q2**: guadagno dei due 2SC536, da 60 a 560 (classi D–G); l'originale è in
+  classe F (160–320). Q1 decide quanto satura il primo stadio, Q2 quanto è "affamato" lo stadio
+  d'uscita: riproduce le differenze fra un esemplare e l'altro.
+
 ## Pick-up (barra superiore)
 
 Il FY-2 ha un ingresso a bassissima impedenza: il pick-up non è "isolato" come davanti a un

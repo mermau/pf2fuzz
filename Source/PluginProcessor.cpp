@@ -2,7 +2,8 @@
 #include "PluginEditor.h"
 
 const std::array<const char*, PF2FuzzProcessor::numLearnable> PF2FuzzProcessor::learnableIDs {
-    ParamIDs::fuzz, ParamIDs::volume, ParamIDs::bypass, ParamIDs::input, ParamIDs::output
+    ParamIDs::fuzz, ParamIDs::volume, ParamIDs::bypass, ParamIDs::input, ParamIDs::output,
+    ParamIDs::supply, ParamIDs::battery, ParamIDs::hfeQ1, ParamIDs::hfeQ2
 };
 
 //==============================================================================
@@ -37,6 +38,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout PF2FuzzProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { ParamIDs::pickupL, 1 }, "Pickup L",
         NormalisableRange<float> (0.5f, 10.0f, 0.05f), 4.0f, AudioParameterFloatAttributes().withLabel ("H")));
     layout.add (trim (ParamIDs::output, "Output Trim"));
+
+    // pannello interno: alimentazione e transistor
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ParamIDs::supply, 1 }, "Supply",
+        StringArray { "Battery", "DC 9 V" }, 0));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { ParamIDs::battery, 1 }, "Battery",
+        NormalisableRange<float> ((float) Battery::minV, (float) Battery::fullV, 0.01f), (float) Battery::nominalV,
+        AudioParameterFloatAttributes().withLabel ("V")
+            .withStringFromValueFunction ([] (float v, int) { return String (v, 2); })));
+    auto hfeRange = [] { NormalisableRange<float> r (60.0f, 560.0f, 1.0f); r.setSkewForCentre (226.0f); return r; };
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { ParamIDs::hfeQ1, 1 }, "hFE Q1", hfeRange(), 226.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { ParamIDs::hfeQ2, 1 }, "hFE Q2", hfeRange(), 226.0f));
     return layout;
 }
 
@@ -54,6 +66,10 @@ PF2FuzzProcessor::PF2FuzzProcessor()
     pickupRaw = apvts.getRawParameterValue (ParamIDs::pickup);
     pickRRaw  = apvts.getRawParameterValue (ParamIDs::pickupR);
     pickLRaw  = apvts.getRawParameterValue (ParamIDs::pickupL);
+    supplyRaw  = apvts.getRawParameterValue (ParamIDs::supply);
+    batteryRaw = apvts.getRawParameterValue (ParamIDs::battery);
+    hfe1Raw    = apvts.getRawParameterValue (ParamIDs::hfeQ1);
+    hfe2Raw    = apvts.getRawParameterValue (ParamIDs::hfeQ2);
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter (ParamIDs::bypass));
 
     for (int i = 0; i < numLearnable; ++i)
@@ -121,7 +137,7 @@ void PF2FuzzProcessor::handleCC (int cc, int value)
         p->endChangeGesture();
     };
 
-    if (idx == 2) // BYPASS: commuta alla pressione (pedale o pulsante "gate")
+    if (idx == 2 || idx == 5) // BYPASS / ALIMENTAZIONE: commutano alla pressione (pulsante "gate")
     {
         const bool high = value >= 64;
         if (high && ! ccHigh[(size_t) cc]) setNorm (p->getValue() > 0.5f ? 0.0f : 1.0f);
@@ -131,6 +147,11 @@ void PF2FuzzProcessor::handleCC (int cc, int value)
     {
         setNorm ((float) value / 127.0f);
     }
+}
+
+float PF2FuzzProcessor::targetSupply() const
+{
+    return supplyRaw->load() > 0.5f ? (float) Battery::dcV : batteryRaw->load();
 }
 
 pf2::Pickup PF2FuzzProcessor::currentPickup() const
@@ -170,6 +191,8 @@ void PF2FuzzProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     const double osRate = sampleRate * (double) oversampling->getOversamplingFactor();
     circuit.setPickup (currentPickup());
+    circuit.setSupply (targetSupply());
+    circuit.setHfe (hfe1Raw->load(), hfe2Raw->load());
     circuit.prepare (osRate);
     circuit.setControls (fuzzRaw->load(), volRaw->load());
 
@@ -193,6 +216,9 @@ void PF2FuzzProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     initSm (volSm,   volRaw->load(),   0.03);
     initSm (inGainSm,  juce::Decibels::decibelsToGain (inRaw->load()),  0.03);
     initSm (outGainSm, juce::Decibels::decibelsToGain (outRaw->load()), 0.03);
+    initSm (vccSm,  targetSupply(),   0.15);   // variazioni di alimentazione addolcite
+    initSm (hfe1Sm, hfe1Raw->load(),  0.10);
+    initSm (hfe2Sm, hfe2Raw->load(),  0.10);
 }
 
 void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -215,6 +241,9 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     volSm.setTargetValue (volRaw->load());
     inGainSm.setTargetValue (juce::Decibels::decibelsToGain (inRaw->load()));
     outGainSm.setTargetValue (juce::Decibels::decibelsToGain (outRaw->load()));
+    vccSm.setTargetValue (targetSupply());
+    hfe1Sm.setTargetValue (hfe1Raw->load());
+    hfe2Sm.setTargetValue (hfe2Raw->load());
     const bool bypassed = bypassRaw->load() > 0.5f;
     mixer.setWetMixProportion (bypassed ? 0.0f : 1.0f);
 
@@ -223,6 +252,12 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     if (bypassed && ! lastBypassState) bypassFadeLeft = bypassFadeSamples;
     if (! bypassed && circuitIdle)
     {
+        // riparte dal punto di riposo con l'alimentazione e i transistor attuali
+        vccSm.setCurrentAndTargetValue (targetSupply());
+        hfe1Sm.setCurrentAndTargetValue (hfe1Raw->load());
+        hfe2Sm.setCurrentAndTargetValue (hfe2Raw->load());
+        circuit.setSupply (vccSm.getCurrentValue());
+        circuit.setHfe (hfe1Sm.getCurrentValue(), hfe2Sm.getCurrentValue());
         circuit.reset();
         oversampling->reset();
         circuitIdle = false;
@@ -270,6 +305,8 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         {
             const int len = juce::jmin (controlBlock, n - start);
             circuit.setControls (fuzzSm.skip (len), volSm.skip (len));
+            circuit.setSupply (vccSm.skip (len));
+            circuit.setHfe (hfe1Sm.skip (len), hfe2Sm.skip (len));
             for (int i = start * factor, end = (start + len) * factor; i < end; ++i)
                 d[i] = (float) circuit.process ((double) d[i]);
         }

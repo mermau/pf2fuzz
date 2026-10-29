@@ -16,7 +16,14 @@ namespace
         return juce::Font (juce::FontOptions (h, bold ? juce::Font::bold : juce::Font::plain));
     }
 
-    const char* displayNames[] = { "FUZZ", "VOLUME", "FOOTSWITCH", "INPUT", "OUTPUT" };
+    const char* displayNames[] = { "FUZZ", "VOLUME", "FOOTSWITCH", "INPUT", "OUTPUT",
+                                   "ALIMENTAZIONE", "CARICA", "hFE Q1", "hFE Q2" };
+
+    // classe di guadagno del 2SC536 (datasheet NEC) per un valore di hFE
+    const char* hfeClass (float h)
+    {
+        return h < 100.0f ? "D" : (h < 160.0f ? "E" : (h <= 320.0f ? "F" : (h <= 560.0f ? "G" : "H")));
+    }
 
     // testo con linea di base, come nella grafica di riferimento
     void drawBaseline (juce::Graphics& g, const juce::Font& f, const juce::String& s,
@@ -133,12 +140,62 @@ PedalLookAndFeel::PedalLookAndFeel()
 }
 
 void PedalLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
-                                         float startAngle, float endAngle, juce::Slider&)
+                                         float startAngle, float endAngle, juce::Slider& slider)
 {
     using namespace juce;
     const auto b = Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
     const auto c = b.getCentre();
     const float angle = startAngle + pos * (endAngle - startAngle);
+    const auto style = slider.getProperties()["style"].toString();
+
+    if (style == "trimmer")   // trimmer multigiro blu da circuito stampato
+    {
+        const float side = jmin (b.getWidth(), b.getHeight()) * 0.62f, r = side * 0.36f;
+        const auto sq = Rectangle<float> (side, side).withCentre (c);
+        g.setColour (Colours::black.withAlpha (0.4f));
+        g.fillRoundedRectangle (sq.translated (0, 2.0f), side * 0.08f);
+        g.setGradientFill (ColourGradient (Colour (0xff3d6fd1), sq.getX(), sq.getY(), Colour (0xff1c3c86), sq.getRight(), sq.getBottom(), false));
+        g.fillRoundedRectangle (sq, side * 0.08f);
+        g.setColour (Colour (0xffd9dde4));
+        g.fillEllipse (Rectangle<float> (2 * r, 2 * r).withCentre (c));
+        Path slot; slot.addRoundedRectangle (-r * 0.18f, -r * 0.9f, r * 0.36f, r * 1.8f, r * 0.1f);
+        g.setColour (Colour (0xff3a3d42));
+        g.fillPath (slot, AffineTransform::rotation (angle).translated (c));
+        // scala attorno al trimmer
+        g.setColour (Colour (0xffc9ccd0).withAlpha (0.6f));
+        for (int i = 0; i <= 10; ++i)
+        {
+            const float a = startAngle + (float) i / 10.0f * (endAngle - startAngle);
+            g.fillEllipse (Rectangle<float> (2.4f, 2.4f).withCentre (c.getPointOnCircumference (side * 0.74f, a)));
+        }
+        return;
+    }
+
+    if (style == "charge")    // carica della batteria: scala verde / ambra / rossa
+    {
+        const float R = jmin (b.getWidth(), b.getHeight()) * 0.5f;
+        const float vNorm = (float) ((Battery::emptyV - Battery::minV) / (Battery::fullV - Battery::minV));
+        auto arc = [&] (float from, float to, Colour col)
+        {
+            Path a; a.addCentredArc (c.x, c.y, R * 0.86f, R * 0.86f, 0.0f,
+                                     startAngle + from * (endAngle - startAngle), startAngle + to * (endAngle - startAngle), true);
+            g.setColour (col);
+            g.strokePath (a, PathStrokeType (R * 0.1f, PathStrokeType::curved, PathStrokeType::butt));
+        };
+        const bool on = slider.isEnabled();
+        arc (0.0f, vNorm, Colour (0xffc8302b).withAlpha (on ? 1.0f : 0.35f));
+        arc (vNorm, vNorm + 0.18f, Colour (0xffd9a32c).withAlpha (on ? 1.0f : 0.35f));
+        arc (vNorm + 0.18f, 1.0f, Colour (0xff6fae55).withAlpha (on ? 1.0f : 0.35f));
+        g.setColour (Colours::black.withAlpha (0.4f));
+        g.fillEllipse (Rectangle<float> (R * 1.36f, R * 1.36f).withCentre (c.translated (0, R * 0.06f)));
+        ColourGradient body (Colour (0xff3b3b3e), c.x - R * 0.2f, c.y - R * 0.3f, Colour (0xff050505), c.x + R * 0.4f, c.y + R * 0.5f, true);
+        g.setGradientFill (body);
+        g.fillEllipse (Rectangle<float> (R * 1.3f, R * 1.3f).withCentre (c));
+        Path p; p.addRoundedRectangle (-R * 0.05f, -R * 0.62f, R * 0.1f, R * 0.36f, R * 0.05f);
+        g.setColour (Colour (0xfff1f2f3).withAlpha (on ? 1.0f : 0.4f));
+        g.fillPath (p, AffineTransform::rotation (angle).translated (c));
+        return;
+    }
 
     if (w < 80)   // manopole di servizio (INPUT / OUTPUT)
     {
@@ -239,6 +296,234 @@ void Footswitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
 }
 
 //==============================================================================
+void SupplySwitch::mouseDown (const juce::MouseEvent& e)
+{
+    if (e.mods.isPopupMenu()) { if (onLearnMenu) onLearnMenu(); return; }
+    Button::mouseDown (e);
+}
+
+void SupplySwitch::paintButton (juce::Graphics& g, bool highlighted, bool)
+{
+    using namespace juce;
+    const auto b = getLocalBounds().toFloat().reduced (1.0f);
+    const bool dc = getToggleState();
+    g.setColour (Colour (0xff0b0b0c));
+    g.fillRoundedRectangle (b, b.getHeight() * 0.25f);
+    g.setColour (Colour (0xff3a3c40));
+    g.drawRoundedRectangle (b, b.getHeight() * 0.25f, 1.0f);
+    const auto half = b.withWidth (b.getWidth() * 0.5f).reduced (3.0f);
+    const auto knob = dc ? half.withX (b.getCentreX() + 0.0f) : half;
+    g.setGradientFill (ColourGradient (Colour (0xffeceef0), knob.getX(), knob.getY(), Colour (0xff8a8e94), knob.getX(), knob.getBottom(), false));
+    g.fillRoundedRectangle (knob, knob.getHeight() * 0.2f);
+    if (highlighted) { g.setColour (Colours::white.withAlpha (0.08f)); g.fillRoundedRectangle (knob, knob.getHeight() * 0.2f); }
+    g.setFont (Font (FontOptions (b.getHeight() * 0.34f, Font::bold)));
+    g.setColour (dc ? Colour (0xff9a9da2) : Colour (0xff18191b));
+    g.drawText ("BATT", half, Justification::centred);
+    g.setColour (dc ? Colour (0xff18191b) : Colour (0xff9a9da2));
+    g.drawText ("DC", half.withX (b.getCentreX()), Justification::centred);
+}
+
+//==============================================================================
+InteriorPanel::InteriorPanel (PF2FuzzProcessor& p, juce::Typeface::Ptr panelFace,
+                              std::function<void (int, juce::Component*)> learnMenu)
+    : proc (p), face (panelFace)
+{
+    using namespace juce;
+    auto setupKnob = [&] (LearnableSlider& s, const char* id, const char* style)
+    {
+        s.setSliderStyle (Slider::RotaryVerticalDrag);
+        s.setTextBoxStyle (Slider::NoTextBox, false, 0, 0);
+        s.setRotaryParameters (MathConstants<float>::pi * 1.25f, MathConstants<float>::pi * 2.75f, true);
+        s.setMouseDragSensitivity (220);
+        s.getProperties().set ("style", style);
+        s.setPopupDisplayEnabled (true, true, this);
+        const int idx = proc.getLearnIndex (id);
+        s.onLearnMenu = [learnMenu, idx, &s] { learnMenu (idx, &s); };
+        s.setTooltip ("Clic destro: MIDI Learn. Doppio clic: valore originale");
+        addAndMakeVisible (s);
+    };
+    setupKnob (charge, ParamIDs::battery, "charge");
+    setupKnob (hfe1,   ParamIDs::hfeQ1,   "trimmer");
+    setupKnob (hfe2,   ParamIDs::hfeQ2,   "trimmer");
+    chargeA = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, ParamIDs::battery, charge);
+    hfe1A   = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, ParamIDs::hfeQ1, hfe1);
+    hfe2A   = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, ParamIDs::hfeQ2, hfe2);
+    charge.setDoubleClickReturnValue (true, Battery::nominalV);
+    hfe1.setDoubleClickReturnValue (true, 226.0);
+    hfe2.setDoubleClickReturnValue (true, 226.0);
+
+    const int supplyIdx = proc.getLearnIndex (ParamIDs::supply);
+    supply.onLearnMenu = [learnMenu, supplyIdx, this] { learnMenu (supplyIdx, &supply); };
+    supply.setTooltip ("Batteria (tensione regolabile) o alimentatore stabilizzato da 9 V. Clic destro: MIDI Learn");
+    addAndMakeVisible (supply);
+    supplyA = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ParamIDs::supply, supply);
+
+    resetBtn.setTooltip ("Batteria a 9 V e transistor al centro della classe F (hFE 226)");
+    resetBtn.onClick = [this] { resetToOriginal(); };
+    closeBtn.onClick = [this] { if (onClose) onClose(); };
+    addAndMakeVisible (resetBtn);
+    addAndMakeVisible (closeBtn);
+    timerCallback();   // valori correnti subito, senza aspettare il primo tick
+    startTimerHz (15);
+}
+
+juce::Font InteriorPanel::font (float pt, float tracking) const
+{
+    return juce::Font (juce::FontOptions (face).withPointHeight (pt * k)).withExtraKerningFactor (tracking / pt);
+}
+
+juce::Rectangle<int> InteriorPanel::area (float x, float y, float w, float h) const
+{
+    return juce::Rectangle<float> (x * k, y * k, w * k, h * k).toNearestInt();
+}
+
+void InteriorPanel::resized()
+{
+    k = (float) getWidth() / baseW;
+    supply.setBounds (area (214, 118, 132, 34));
+    charge.setBounds (area (230, 186, 100, 100));
+    hfe1.setBounds   (area (60, 404, 100, 100));
+    hfe2.setBounds   (area (220, 404, 100, 100));
+    resetBtn.setBounds (area (44, 594, 180, 32));
+    closeBtn.setBounds (area (240, 594, 96, 32));
+}
+
+juce::Component* InteriorPanel::controlFor (int idx)
+{
+    switch (idx) { case 5: return &supply; case 6: return &charge; case 7: return &hfe1; case 8: return &hfe2; default: return nullptr; }
+}
+
+void InteriorPanel::resetToOriginal()
+{
+    auto set = [this] (const char* id, float v)
+    {
+        auto* prm = proc.apvts.getParameter (id);
+        prm->beginChangeGesture(); prm->setValueNotifyingHost (prm->convertTo0to1 (v)); prm->endChangeGesture();
+    };
+    set (ParamIDs::supply, 0.0f);
+    set (ParamIDs::battery, (float) Battery::nominalV);
+    set (ParamIDs::hfeQ1, 226.0f);
+    set (ParamIDs::hfeQ2, 226.0f);
+}
+
+void InteriorPanel::timerCallback()
+{
+    const bool dc = proc.apvts.getRawParameterValue (ParamIDs::supply)->load() > 0.5f;
+    const float v = proc.apvts.getRawParameterValue (ParamIDs::battery)->load();
+    const float h1 = proc.apvts.getRawParameterValue (ParamIDs::hfeQ1)->load();
+    const float h2 = proc.apvts.getRawParameterValue (ParamIDs::hfeQ2)->load();
+    if (dc != lastDC || std::abs (v - lastV) > 1e-4f || std::abs (h1 - lastH1) > 1e-3f || std::abs (h2 - lastH2) > 1e-3f)
+    {
+        lastDC = dc; lastV = v; lastH1 = h1; lastH2 = h2;
+        charge.setEnabled (! dc);
+        repaint();
+    }
+}
+
+void InteriorPanel::paint (juce::Graphics& g)
+{
+    using namespace juce;
+    g.addTransform (AffineTransform::scale (k));
+    const float W = baseW, H = baseH;
+    auto f = [this] (float pt, float tr = 0.0f) { return font (pt, tr).withPointHeight (pt); };   // già scalato dalla trasformazione
+
+    // fondo del pedale aperto
+    g.setColour (Colour (0xff141416));
+    g.fillRoundedRectangle (0, 0, W, H, 14.0f);
+    g.setColour (Colour (0xff3a3c40));
+    g.drawRoundedRectangle (0.5f, 0.5f, W - 1.0f, H - 1.0f, 14.0f, 1.0f);
+
+    g.setColour (cream);
+    g.setFont (f (18.0f, 4.0f));
+    g.drawText ("INTERNO", Rectangle<float> (0, 22, W, 24), Justification::centred);
+    g.setColour (Colour (0xff8a8d92));
+    g.setFont (uiFont (10.0f, false));
+    g.drawText ("alimentazione e transistor", Rectangle<float> (0, 46, W, 14), Justification::centred);
+
+    // --- alimentazione ---
+    const bool dc = lastDC;
+    const float v = dc ? (float) Battery::dcV : lastV;
+    const double ch = Battery::chargeFromVolts (v);
+    g.setColour (Colour (0xffc9ccd0));
+    g.setFont (f (11.0f, 2.0f));
+    g.drawText ("ALIMENTAZIONE", Rectangle<float> (30, 82, W - 60, 16), Justification::centredLeft);
+
+    // batteria 9 V disegnata, con il livello di carica
+    const Rectangle<float> bat (54, 122, 104, 168);
+    g.setColour (Colour (0xff2a2b2e));
+    g.fillRoundedRectangle (bat.getX() + 18, bat.getY() - 14, 22, 16, 3.0f);
+    g.fillRoundedRectangle (bat.getRight() - 40, bat.getY() - 14, 22, 16, 3.0f);
+    g.setColour (Colour (0xff9a9da2));
+    g.drawEllipse (bat.getX() + 22, bat.getY() - 11, 14, 10, 1.6f);
+    g.drawRect (bat.getRight() - 36.0f, bat.getY() - 11.0f, 14.0f, 10.0f, 1.6f);
+    g.setColour (Colour (0xff202124));
+    g.fillRoundedRectangle (bat, 8.0f);
+    g.setColour (Colour (0xff4a4d52));
+    g.drawRoundedRectangle (bat, 8.0f, 1.5f);
+    if (dc)
+    {
+        g.setColour (Colour (0xff8a8d92));
+        g.setFont (f (14.0f, 1.0f));
+        g.drawText ("DC", bat, Justification::centred);
+    }
+    else
+    {
+        const float lvl = (float) jlimit (0.0, 1.0, ch);
+        const Colour col = ch <= 0.0 ? Colour (0xffc8302b) : (ch < 0.25 ? Colour (0xffd9a32c) : Colour (0xff6fae55));
+        const auto inner = bat.reduced (8.0f);
+        const auto fill = inner.withTrimmedTop (inner.getHeight() * (1.0f - lvl));
+        g.setColour (col.withAlpha (0.85f));
+        g.fillRoundedRectangle (fill.withHeight (jmax (fill.getHeight(), ch <= 0.0 ? 4.0f : 0.0f)).withBottomY (inner.getBottom()), 4.0f);
+        g.setColour (Colours::white.withAlpha (0.85f));
+        g.setFont (f (16.0f, 1.0f));
+        g.drawText ("9V", bat.withTrimmedTop (16).withHeight (24), Justification::centred);
+    }
+    g.setColour (cream);
+    g.setFont (uiFont (13.0f));
+    g.drawText (String (v, 2) + " V", Rectangle<float> (34, 298, 144, 18), Justification::centred);
+    g.setColour (Colour (0xff9a9da2));
+    g.setFont (uiFont (10.0f, false));
+    const String state = dc ? String ("alimentatore stabilizzato")
+                       : (ch < 0.0 ? String ("oltre la scarica")
+                       : String (roundToInt (ch * 100.0)) + "% di carica");
+    g.drawText (state, Rectangle<float> (34, 316, 144, 14), Justification::centred);
+
+    g.setColour (Colour (0xff9a9da2));
+    g.setFont (uiFont (9.0f));
+    g.drawText ("BATTERIA", Rectangle<float> (214, 154, 66, 12), Justification::centred);
+    g.drawText ("ALIMENTATORE", Rectangle<float> (280, 154, 66, 12), Justification::centred);
+    g.setColour (Colour (0xffc9ccd0));
+    g.setFont (f (10.0f, 1.5f));
+    g.drawText ("CARICA", Rectangle<float> (230, 290, 100, 14), Justification::centred);
+    g.setColour (Colour (0xff6c6f74));
+    g.setFont (uiFont (8.0f, false));
+    g.drawText ("4.5 V", Rectangle<float> (214, 270, 40, 10), Justification::centredLeft);
+    g.drawText ("9.6 V", Rectangle<float> (306, 270, 40, 10), Justification::centredRight);
+
+    // --- transistor su circuito stampato ---
+    const Rectangle<float> pcb (24, 350, W - 48, 222);
+    g.setColour (Colour (0xff1d3a28));
+    g.fillRoundedRectangle (pcb, 6.0f);
+    g.setColour (Colour (0xffb07a3a).withAlpha (0.35f));
+    for (float yy : { 380.0f, 520.0f }) g.drawLine (pcb.getX() + 14, yy, pcb.getRight() - 14, yy, 2.0f);
+    g.drawLine (190.0f, 380.0f, 190.0f, 520.0f, 2.0f);
+    g.setColour (Colour (0xffe8e2c8));
+    g.setFont (f (11.0f, 2.0f));
+    g.drawText ("TRANSISTOR 2SC536", Rectangle<float> (pcb.getX(), 358, pcb.getWidth(), 16), Justification::centred);
+    for (auto [cx, label, hv] : { std::tuple<float, const char*, float> { 110.0f, "Q1", lastH1 }, { 270.0f, "Q2", lastH2 } })
+    {
+        g.setColour (Colour (0xffe8e2c8));
+        g.setFont (f (12.0f, 1.0f));
+        g.drawText (label, Rectangle<float> (cx - 50, 386, 100, 16), Justification::centred);
+        g.setFont (uiFont (11.0f));
+        g.drawText ("hFE " + String (roundToInt (hv)) + "  " + hfeClass (hv), Rectangle<float> (cx - 60, 506, 120, 14), Justification::centred);
+    }
+    g.setColour (Colour (0xffb9b39a));
+    g.setFont (uiFont (9.0f, false));
+    g.drawText (String::fromUTF8 ("originale: classe F, hFE 160\xe2\x80\x93" "320"), Rectangle<float> (pcb.getX(), 548, pcb.getWidth(), 14), Justification::centred);
+}
+
+//==============================================================================
 juce::Font PF2FuzzEditor::scriptFont (float pt) const
 {
     return juce::Font (juce::FontOptions (scriptFace).withPointHeight (pt));
@@ -295,6 +580,16 @@ PF2FuzzEditor::PF2FuzzEditor (PF2FuzzProcessor& p)
     pickupMenuBtn.onClick = [this] { showPickupMenu(); };
     addAndMakeVisible (pickupMenuBtn);
     rebuildPickupBox();
+
+    // pannello interno (alimentazione e transistor), aperto dal pulsante INTERNO
+    interior = std::make_unique<InteriorPanel> (proc, panelFace, [this] (int idx, juce::Component* c) { showLearnMenu (idx, c); });
+    interior->onClose = [this] { interior->setVisible (false); interiorBtn.setToggleState (false, juce::dontSendNotification); };
+    addChildComponent (*interior);
+    interiorBtn.setClickingTogglesState (true);
+    interiorBtn.setTooltip ("Apre l'interno del pedale: batteria o alimentatore, carica, guadagno dei transistor");
+    interiorBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8c1218));
+    interiorBtn.onClick = [this] { interior->setVisible (interiorBtn.getToggleState()); interior->toFront (false); };
+    addAndMakeVisible (interiorBtn);
     for (auto* s : { &pickR, &pickL })
     {
         s->setSliderStyle (juce::Slider::LinearHorizontal);
@@ -320,6 +615,7 @@ PF2FuzzEditor::PF2FuzzEditor (PF2FuzzProcessor& p)
     setSize (baseW, baseH);
 
     lastBypass = proc.apvts.getRawParameterValue (ParamIDs::bypass)->load() > 0.5f;
+    timerCallback();
     startTimerHz (30);
 }
 
@@ -347,6 +643,9 @@ void PF2FuzzEditor::resized()
     pickupMenuBtn.setBounds (base (234.0f, 64.0f, 26.0f,  24.0f).toNearestInt());
     pickR.setBounds         (base (264.0f, 64.0f, 76.0f,  24.0f).toNearestInt());
     pickL.setBounds         (base (342.0f, 64.0f, 72.0f,  24.0f).toNearestInt());
+    interiorBtn.setBounds   (base (298.0f, 12.0f, 52.0f,  36.0f).toNearestInt());
+    if (interior != nullptr)
+        interior->setBounds (base (20.0f, pedalY + 14.0f, InteriorPanel::baseW, InteriorPanel::baseH).toNearestInt());
 
     // pedale (coordinate della proposta A + pedalY)
     place (footswitch, 210.0f, pedalY + 120.0f, 84.0f, 84.0f);
@@ -455,7 +754,7 @@ void PF2FuzzEditor::paint (juce::Graphics& g)
     g.fillEllipse (Rectangle<float> (10.0f, 10.0f).withCentre (led));
 
     // display MIDI
-    const Rectangle<float> disp (76.0f, 8.0f, 268.0f, 44.0f);
+    const Rectangle<float> disp (76.0f, 8.0f, 216.0f, 44.0f);
     g.setColour (Colour (0xff0a110b));
     g.fillRoundedRectangle (disp, 4.0f);
     g.setColour (Colour (0xff23262a));
@@ -494,7 +793,7 @@ void PF2FuzzEditor::paintOverChildren (juce::Graphics& g)
     {
         const float a = 0.45f + 0.45f * std::sin (pulse);
         g.setColour (learnCol.withAlpha (a));
-        g.drawRoundedRectangle (c->getBounds().toFloat().expanded (3.0f * scale), 8.0f * scale, 2.0f * scale);
+        g.drawRoundedRectangle (getLocalArea (c, c->getLocalBounds()).toFloat().expanded (3.0f * scale), 8.0f * scale, 2.0f * scale);
     }
 }
 
@@ -504,6 +803,7 @@ juce::Component* PF2FuzzEditor::controlFor (int idx)
     {
         case 0: return &fuzz;   case 1: return &volume; case 2: return &footswitch;
         case 3: return &inTrim; case 4: return &outTrim;
+        case 5: case 6: case 7: case 8: return interior != nullptr && interior->isVisible() ? interior->controlFor (idx) : nullptr;
         default: return nullptr;
     }
 }
