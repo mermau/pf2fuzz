@@ -95,6 +95,9 @@ public:
     void paintOverChildren (juce::Graphics&) override;
     void resized() override;
 
+    // icona dell'applicazione Standalone (resources/icon.png), stessa grafica del pedale
+    static juce::Image createAppIcon (int size);
+
     // coordinate di progetto (proposta grafica A): barra di servizio 0-96, pedale sotto
     static constexpr int baseW = 420, baseH = 780;
     static constexpr float pedalY = 96.0f;

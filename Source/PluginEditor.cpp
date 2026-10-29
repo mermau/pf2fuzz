@@ -524,6 +524,65 @@ void InteriorPanel::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+juce::Image PF2FuzzEditor::createAppIcon (int size)
+{
+    using namespace juce;
+    Image img (Image::ARGB, size, size, true);
+    Graphics g (img);
+    const float u = (float) size / 1024.0f;
+    auto R = [u] (float x, float y, float w, float h) { return Rectangle<float> (x * u, y * u, w * u, h * u); };
+
+    // corpo nero martellato (griglia delle icone macOS: 824 px con ombra)
+    const auto body = R (100, 100, 824, 824);
+    Path bodyPath; bodyPath.addRoundedRectangle (body, 185.0f * u);
+    DropShadow (Colours::black.withAlpha (0.55f), roundToInt (28 * u), { 0, roundToInt (12 * u) }).drawForPath (g, bodyPath);
+    {
+        Graphics::ScopedSaveState st (g);
+        g.reduceClipRegion (bodyPath);
+        g.drawImage (makeCrinkle (roundToInt (body.getWidth()), roundToInt (body.getHeight()), 4.0f * u), body);
+    }
+    g.setColour (Colour (0xff3a3c40));
+    g.strokePath (bodyPath, PathStrokeType (3.0f * u));
+
+    // pannello in acciaio con VOL e FUZZ
+    const auto panel = R (172, 178, 680, 400);
+    Path panelPath; panelPath.addRoundedRectangle (panel, 22.0f * u);
+    {
+        Graphics::ScopedSaveState st (g);
+        g.reduceClipRegion (panelPath);
+        g.drawImage (makeSteel (roundToInt (panel.getWidth()), roundToInt (panel.getHeight()), 2.0f * u,
+                                panel.getWidth() / (2.0f * u), panel.getHeight() / (2.0f * u)), panel);
+    }
+    g.setColour (Colour (0xff56595e));
+    g.strokePath (panelPath, PathStrokeType (3.0f * u));
+
+    PedalLookAndFeel lnf;
+    Slider dummy;
+    const float start = MathConstants<float>::pi * 1.25f, end = MathConstants<float>::pi * 2.75f;
+    for (auto [cx, pos] : { std::pair<float, float> { 352.0f, 0.5f }, { 672.0f, 0.7f } })
+    {
+        const auto kb = R (cx - 140, 378 - 140, 280, 280).toNearestInt();
+        lnf.drawRotarySlider (g, kb.getX(), kb.getY(), kb.getWidth(), kb.getHeight(), pos, start, end, dummy);
+    }
+
+    // targhetta rossa con il nome
+    const auto badge = R (232, 642, 560, 190);
+    g.setColour (Colours::black.withAlpha (0.45f));
+    g.fillRoundedRectangle (badge.translated (0, 8 * u), 18 * u);
+    g.setGradientFill (ColourGradient (Colour (0xffd42a30), 0, badge.getY(), Colour (0xff8c1218), 0, badge.getBottom(), false));
+    g.fillRoundedRectangle (badge, 18 * u);
+    g.setColour (Colour (0xffe6e7ea).withAlpha (0.6f));
+    g.drawRoundedRectangle (badge.reduced (12 * u), 10 * u, 3 * u);
+    auto face = Typeface::createSystemTypefaceFor (BinaryData::ArchivoBlackRegular_ttf, BinaryData::ArchivoBlackRegular_ttfSize);
+    const Font f = Font (FontOptions (face).withPointHeight (118.0f * u)).withExtraKerningFactor (0.04f);
+    ColourGradient chromeText (Colours::white, 0, badge.getY() + 40 * u, Colour (0xff9a9ea4), 0, badge.getBottom() - 40 * u, false);
+    chromeText.addColour (0.55, Colour (0xffd6d9dd));
+    g.setGradientFill (chromeText);
+    drawBaseline (g, f, "FYN-2", badge.getCentreX(), badge.getCentreY() + 42 * u, Justification::horizontallyCentred);
+    return img;
+}
+
+//==============================================================================
 juce::Font PF2FuzzEditor::scriptFont (float pt) const
 {
     return juce::Font (juce::FontOptions (scriptFace).withPointHeight (pt));

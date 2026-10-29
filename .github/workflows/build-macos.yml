@@ -41,6 +41,7 @@ jobs:
           chmod +x "dist/FYN-2/Installa FYN-2.command"
           cp README.md "dist/FYN-2/"
           lipo -info "dist/FYN-2/FYN-2.vst3/Contents/MacOS/FYN-2"
+          ls "dist/FYN-2/FYN-2.app/Contents/Resources/"   # deve contenere Icon.icns
           (cd dist && ditto -c -k --keepParent "FYN-2" ../FYN2-macOS.zip)
 
       - name: Carica l'artefatto

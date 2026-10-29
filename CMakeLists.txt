@@ -35,6 +35,7 @@ juce_add_plugin(FYN2
     AU_MAIN_TYPE kAudioUnitType_Effect   # AU standard ("aufx"): va negli slot Audio FX di Logic
     VST3_CATEGORIES Fx Distortion
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    ICON_BIG resources/icon.png               # icona della Standalone (PF2FuzzEditor::createAppIcon)
     MICROPHONE_PERMISSION_ENABLED TRUE        # macOS: senza, la Standalone riceve solo silenzio
     MICROPHONE_PERMISSION_TEXT "FYN-2 usa l'ingresso della scheda audio per elaborare il segnale della chitarra."
     COPY_PLUGIN_AFTER_BUILD TRUE)
