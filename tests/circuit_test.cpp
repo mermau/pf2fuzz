@@ -17,5 +17,5 @@ int main(){ const double fs=192000;
  FuzzCircuit c; c.prepare(fs); auto t0=std::chrono::steady_clock::now(); volatile double s=0;
  for(int i=0;i<fs*10;i++) s=s+c.process(0.2*std::sin(i*0.0072));
  double sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
- printf("CPU: %.1f%% di un core per canale (4x a 48k)\n",sec*10);
+ printf("CPU: %.1f%% di un core (circuito a 192 kHz)\n",sec*10);
 }

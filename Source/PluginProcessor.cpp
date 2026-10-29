@@ -141,7 +141,7 @@ pf2::Pickup PF2FuzzProcessor::currentPickup() const
         case 1:  return pf2::Pickup::singleCoil();
         case 2:  return pf2::Pickup::p90();
         case 3:  return pf2::Pickup::humbucker();
-        default: return { pickRRaw->load() * 1000.0, (double) pickLRaw->load() };
+        default: return { pickRRaw->load() * 1000.0, (double) pickLRaw->load(), 150e-12, 250e3 };   // C e pot tipici
     }
 }
 
@@ -160,8 +160,9 @@ void PF2FuzzProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     maxBlock = juce::jmax (1, samplesPerBlock);
     osChannels = (int) numCh;
 
-    // il circuito gira sempre a circa 176-192 kHz: 4x a 44.1/48 kHz, 2x a 88.2/96 kHz
-    const int oversamplingOrder = sampleRate > 120000.0 ? 0 : (sampleRate > 60000.0 ? 1 : 2);
+    // il circuito gira sempre a circa 350-390 kHz: 8x a 44.1/48 kHz, 4x a 88.2/96 kHz,
+    // 2x a 176.4/192 kHz (aliasing delle armoniche del fuzz sotto i -55 dB)
+    const int oversamplingOrder = sampleRate > 300000.0 ? 0 : (sampleRate > 120000.0 ? 1 : (sampleRate > 60000.0 ? 2 : 3));
     oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
         1, (size_t) oversamplingOrder,
         juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
@@ -179,6 +180,12 @@ void PF2FuzzProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mixer.setWetMixProportion (bypassRaw->load() > 0.5f ? 0.0f : 1.0f);
     mixer.prepare ({ sampleRate, (juce::uint32) samplesPerBlock, (juce::uint32) numCh });
     mixer.setWetLatency (latency);
+
+    // bypass: dopo la dissolvenza del mixer (50 ms) il circuito non viene più calcolato
+    bypassFadeSamples = juce::roundToInt (0.08 * sampleRate);
+    lastBypassState = bypassRaw->load() > 0.5f;
+    bypassFadeLeft = 0;
+    circuitIdle = lastBypassState;
 
     auto initSm = [sampleRate] (juce::SmoothedValue<float>& s, float v, double sec)
     { s.reset (sampleRate, sec); s.setCurrentAndTargetValue (v); };
@@ -208,7 +215,24 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     volSm.setTargetValue (volRaw->load());
     inGainSm.setTargetValue (juce::Decibels::decibelsToGain (inRaw->load()));
     outGainSm.setTargetValue (juce::Decibels::decibelsToGain (outRaw->load()));
-    mixer.setWetMixProportion (bypassRaw->load() > 0.5f ? 0.0f : 1.0f);
+    const bool bypassed = bypassRaw->load() > 0.5f;
+    mixer.setWetMixProportion (bypassed ? 0.0f : 1.0f);
+
+    // true bypass: a dissolvenza finita il circuito resta fermo (come il pedale, il cui
+    // ingresso è scollegato) e non consuma CPU; al reinserimento riparte dal punto di riposo
+    if (bypassed && ! lastBypassState) bypassFadeLeft = bypassFadeSamples;
+    if (! bypassed && circuitIdle)
+    {
+        circuit.reset();
+        oversampling->reset();
+        circuitIdle = false;
+    }
+    lastBypassState = bypassed;
+    if (bypassed && ! circuitIdle)
+    {
+        bypassFadeLeft -= buffer.getNumSamples();
+        if (bypassFadeLeft < -buffer.getNumSamples()) circuitIdle = true;   // ancora un blocco di margine
+    }
 
     juce::dsp::AudioBlock<float> full (buffer);
     full = full.getSubsetChannelBlock (0, (size_t) numCh);
@@ -223,6 +247,7 @@ void PF2FuzzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         auto mono  = block.getSingleChannelBlock (0);   // ingresso: canale sinistro / mono
 
         mixer.pushDrySamples (block);
+        if (circuitIdle) { mixer.mixWetSamples (block); continue; }   // solo il ramo diretto
 
         auto* x = mono.getChannelPointer (0);
 

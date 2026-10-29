@@ -46,9 +46,17 @@ L'elenco è condiviso da tutti i progetti: si trova in `~/Library/Application Su
 (macOS) o in `%APPDATA%\Collateral Effects\FYN-2\` (Windows). Ogni progetto ricorda quale chitarra era scelta. Le chitarre salvate con la versione "PF-2 Fuzz" vengono recuperate in automatico.
 Se modifichi R o L di una chitarra salvata, il menu mostra "Personalizzato" finché non la salvi di nuovo.
 
-Il modello include anche la capacità del cavo (470 pF). La resistenza in continua dei pick-up
-è quasi sempre indicata dal costruttore; l'induttanza meno spesso: se non la conosci, parti
-dai valori tipici. La chitarra va collegata all'ingresso Hi-Z (strumento) della scheda audio.
+Il modello include anche la capacità propria del pick-up (120–180 pF), il cavo (470 pF) e il
+carico dei potenziometri della chitarra (125 kΩ con pot da 250k per i single coil, 250 kΩ con
+pot da 500k per P-90 e humbucker). La resistenza in continua dei pick-up è quasi sempre indicata
+dal costruttore; l'induttanza meno spesso: se non la conosci, parti dai valori tipici.
+
+La chitarra va collegata all'ingresso Hi-Z (strumento) della scheda audio. La scheda registra il
+pick-up quasi a vuoto, con il suo picco di risonanza (2,5–4 kHz) e gli acuti attenuati sopra di
+esso; il FY-2, che carica il pick-up con pochi kΩ, quel picco non lo sente. Con un pick-up
+selezionato il plugin ricostruisce quindi il segnale del pick-up prima del circuito (correzione
+limitata sopra i 10 kHz per non esaltare il fruscio della scheda). Con "Ideale" la correzione è
+disattivata.
 
 ## Scaricare la versione per Mac (Apple Silicon e Intel)
 
@@ -95,7 +103,8 @@ cmake --build build --config Release
 ```
 (la copia in `C:\Program Files\Common Files\VST3` richiede il terminale come amministratore).
 
-Test del modello: `build/circuit_test` (punto di lavoro, distorsione al variare di FUZZ, CPU).
+Test del modello: `build/circuit_test` (punto di lavoro, distorsione al variare di FUZZ, CPU) e
+`build/click_test` (assenza di click e salti nel risolutore), eseguiti anche su GitHub a ogni build.
 
 ## Usare la KeyLab
 
@@ -126,12 +135,16 @@ Il circuito viene risolto per intero a ogni campione, senza curve di distorsione
 - Polarizzazione, clipping asimmetrico, spostamento del bias per la carica di C3, somma in
   controfase dei due stadi sul FUZZ e carico della rete d'uscita sui collettori emergono
   dalla simulazione stessa.
-- Il circuito gira sempre a 176–192 kHz: oversampling 4× a 44.1/48 kHz, 2× a 88.2/96 kHz
-  (latenza 6 o 4 campioni). Circa il 12% di un core.
+- Il circuito gira sempre a 350–390 kHz: oversampling 8× a 44.1/48 kHz, 4× a 88.2/96 kHz,
+  2× a 176.4/192 kHz (latenza 6 campioni). L'aliasing delle armoniche del fuzz resta sotto i −55 dB.
+- Calcolo in forma di variabili di stato con matrici precalcolate, Newton-Raphson con
+  predittore e limitazione delle giunzioni (pnjlim, come SPICE): circa il 9% di un core a 8×.
+- In bypass, finita la dissolvenza, il circuito non viene calcolato (come il pedale true
+  bypass, il cui ingresso è scollegato) e non consuma CPU.
 
-**Limiti noti**: i valori dei pick-up sono tipici, non misurati sulle tue chitarre; il segnale
-registrato dalla scheda contiene già la risonanza del pick-up a vuoto, quindi la ricostruzione
-del carico è un'approssimazione; l'hFE reale varia da esemplare a esemplare
+**Limiti noti**: i valori dei pick-up sono tipici, non misurati sulle tue chitarre; la
+ricostruzione del segnale del pick-up presuppone un ingresso Hi-Z da 1 MΩ e il volume della
+chitarra al massimo; l'hFE reale varia da esemplare a esemplare
 (160–320 nella classe F), e il modello ne usa il valore centrale; il
 verso del FUZZ (orario = più armoniche) è dedotto dal modello. Tutti i valori sono in
 `struct Components` e `struct BJT` dentro `Source/FuzzCircuit.h`.

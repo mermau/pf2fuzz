@@ -48,14 +48,42 @@ struct Components
     static constexpr double Cmu = 3.5e-12;  // Cob del 2SC536 (datasheet, Vce 6 V)
 };
 
-// Pick-up: resistenza in continua e induttanza (valori tipici misurati)
+// Pick-up e chitarra: resistenza in continua e induttanza della bobina, sua capacità
+// propria, carico dei potenziometri di volume e tono (valori tipici)
 struct Pickup
 {
-    double R, L;
-    static constexpr Pickup ideal()      { return { 10e3, 1e-6 }; }   // sorgente resistiva
-    static constexpr Pickup singleCoil() { return { 6e3,  2.5 }; }    // tipo Strat/Tele
-    static constexpr Pickup p90()        { return { 8e3,  6.0 }; }    // P-90 tipico
-    static constexpr Pickup humbucker()  { return { 10e3, 5.0 }; }
+    double R, L, C = 150e-12, Rload = 250e3;
+    bool ideal_ = false;
+    static constexpr Pickup ideal()      { return { 10e3, 1e-6, 0.0,      1e12,  true }; }  // sorgente resistiva
+    static constexpr Pickup singleCoil() { return { 6e3,  2.5,  120e-12,  125e3 }; }  // Strat/Tele, pot 250k
+    static constexpr Pickup p90()        { return { 8e3,  6.0,  150e-12,  250e3 }; }  // pot 500k
+    static constexpr Pickup humbucker()  { return { 10e3, 5.0,  180e-12,  250e3 }; }  // pot 500k
+    bool operator== (const Pickup& o) const
+    {
+        return std::abs (R - o.R) < 1e-3 && std::abs (L - o.L) < 1e-9 && std::abs (C - o.C) < 1e-15
+            && std::abs (Rload - o.Rload) < 1e-3 && ideal_ == o.ideal_;
+    }
+};
+
+// Biquad da prototipo analogico (bilineare), doppia precisione
+struct AnalogBiquad
+{
+    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
+    void reset() { z1 = z2 = 0; }
+    void set (double n0, double n1, double n2, double d0, double d1, double d2, double fs)
+    {
+        const double K = 2.0 * fs, K2 = K * K;
+        const double A0 = d0 + d1 * K + d2 * K2;
+        b0 = (n0 + n1 * K + n2 * K2) / A0;  b1 = (2.0 * n0 - 2.0 * n2 * K2) / A0;  b2 = (n0 - n1 * K + n2 * K2) / A0;
+        a1 = (2.0 * d0 - 2.0 * d2 * K2) / A0;  a2 = (d0 - d1 * K + d2 * K2) / A0;
+    }
+    inline double process (double x)
+    {
+        const double y = b0 * x + z1;
+        z1 = b1 * x - a1 * y + z2;
+        z2 = b2 * x - a2 * y;
+        return y;
+    }
 };
 
 // Transistor originali: NEC 2SC536, marcatura "C536 F7G" = classe di guadagno F
@@ -79,6 +107,7 @@ public:
         fs = sampleRate;
         dcBlock.setCutoff (5.0, fs);
         fuzzPos = 0.7; volPos = 0.5;
+        updateInputCorrection();
         solveOperatingPoint();
     }
 
@@ -87,8 +116,12 @@ public:
     // pick-up della chitarra (vedi struct Pickup)
     void setPickup (Pickup pu)
     {
-        if (std::abs (pu.R - pickup.R) < 1e-3 && std::abs (pu.L - pickup.L) < 1e-9) return;
-        pickup = { std::max (pu.R, 100.0), std::max (pu.L, 1e-6) };
+        pu.R = std::max (pu.R, 100.0); pu.L = std::max (pu.L, 1e-6);
+        pu.C = std::max (pu.C, 0.0);   pu.Rload = std::max (pu.Rload, 1e3);
+        if (pu == pickup) return;
+        pickup = pu;
+        caps[0].C = Components::Ccable + pickup.C;
+        updateInputCorrection();
         build (true);
     }
 
@@ -103,64 +136,70 @@ public:
 
     inline double process (double vin)
     {
-        // termine noto: generatore, alimentazione, storia dei condensatori
-        std::array<double, NN> b = bConst;
-        b[PU] += vin * gIn;
-        b[PU] -= indH;   // storia dell'induttanza PU → IN
-        b[IN] += indH;
-        for (auto& c : caps)
-        {
-            if (c.i >= 0) b[(size_t) c.i] += c.J + (c.j == RAIL ? c.geq * Components::Vcc : 0.0);
-            if (c.j >= 0) b[(size_t) c.j] -= c.J;
-        }
+        vin = inputCorrection.process (vin);
 
-        std::array<double, NP> p0 {};
+        // forma a variabili di stato: x = storie dei condensatori e dell'induttanza,
+        // matrici precalcolate in build() (nessuna diramazione nel ciclo per campione)
+        std::array<double, NP> p0;
         for (size_t r = 0; r < NP; ++r)
         {
-            double s = 0.0;
-            for (size_t k = 0; k < NN; ++k) s += P[r][k] * b[k];
-            p0[r] = s;
+            double acc = pc[r] + pIn[r] * vin;
+            for (size_t k = 0; k < NS; ++k) acc += Px[r][k] * x[k];
+            p0[r] = acc;
         }
 
+        // punto di partenza: estrapolazione lineare dai due campioni precedenti
         std::array<double, NP> cur {};
+        const auto pLast = pState;
+        for (size_t r = 0; r < NP; ++r) pState[r] = std::clamp (2.0 * pState[r] - pPrev[r], -12.0, 1.0);
         newton (p0, cur, 40);
+        pPrev = pLast;
 
-        for (size_t r = 0; r < NN; ++r)
+        double y = yc + yu * vin;
+        for (size_t k = 0; k < NS; ++k) y += yx[k] * x[k];
+        for (size_t k = 0; k < NP; ++k) y += yi[k] * cur[k];
+
+        std::array<double, NS> xn;
+        for (size_t r = 0; r < NS; ++r)
         {
-            double s = 0.0;
-            for (size_t k = 0; k < NN; ++k) s += Ainv[r][k] * b[k];
-            for (size_t k = 0; k < NP; ++k) s -= Q[r][k] * cur[k];
-            v[r] = s;
+            double acc = d0[r] + bu[r] * vin;
+            for (size_t k = 0; k < NS; ++k) acc += Ax[r][k] * x[k];
+            for (size_t k = 0; k < NP; ++k) acc += Ci[r][k] * cur[k];
+            xn[r] = acc;
         }
+        lastX = x; lastVin = vin; lastCur = cur;
+        x = xn;
 
-        for (auto& c : caps) c.J = 2.0 * c.geq * capVoltage (c) - c.J;
-        {
-            const double vl = v[PU] - v[IN];
-            const double il = indG * vl + indH;
-            indH = il + indG * vl;
-        }
-
-        return dcBlock.hp (v[WV]);
+        return dcBlock.hp (y);
     }
 
-    // per test e diagnostica: tensioni continue ai collettori
-    double nodeVoltage (int n) const { return v[(size_t) n]; }
+    // per test e diagnostica: tensione di un nodo all'ultimo campione calcolato
+    double nodeVoltage (int n) const
+    {
+        const auto r = (size_t) n;
+        double acc = m0[r] + mu[r] * lastVin;
+        for (size_t k = 0; k < NS; ++k) acc += Mx[r][k] * lastX[k];
+        for (size_t k = 0; k < NP; ++k) acc += mi[r][k] * lastCur[k];
+        return acc;
+    }
 
 private:
     static constexpr int GND = -1, RAIL = -2;
     struct Res { int i, j; double r; };
-    struct Cap { int i, j; double C, geq = 0.0, J = 0.0; };
+    struct Cap { int i, j; double C, geq = 0.0; };
+    static constexpr int NC = 10, NS = NC + 1;   // stati: 10 condensatori + induttanza del pick-up
 
-    std::array<Cap, 10> caps { {
+    std::array<Cap, NC> caps { {
         { IN, GND, Components::Ccable },
         { IN, B1, Components::C1 }, { K1, B1, Components::C2 }, { K1, B2, Components::C3 },
         { S, RAIL, Components::C8 }, { K1, W, Components::C4 },  { K2, D, Components::C5 },
         { X, VO, Components::C6 },   { M, GND, Components::C7 },  { K2, B2, Components::Cmu } } };
 
-    double capVoltage (const Cap& c) const
+    // tensione ai capi di un condensatore dato il vettore dei nodi
+    static double capVoltage (const Cap& c, const std::array<double, NN>& vn)
     {
-        const double vi = c.i >= 0 ? v[(size_t) c.i] : 0.0;
-        const double vj = c.j >= 0 ? v[(size_t) c.j] : (c.j == RAIL ? Components::Vcc : 0.0);
+        const double vi = c.i >= 0 ? vn[(size_t) c.i] : 0.0;
+        const double vj = c.j >= 0 ? vn[(size_t) c.j] : (c.j == RAIL ? Components::Vcc : 0.0);
         return vi - vj;
     }
 
@@ -180,9 +219,11 @@ private:
         };
         auto addR = [&] (int i, int j, double r) { addG (i, j, 1.0 / std::max (r, 1.0)); };
 
-        // generatore del pick-up (equivalente di Norton) e induttanza PU → IN
+        // generatore del pick-up (equivalente di Norton) e induttanza PU → IN;
+        // all'uscita del pick-up: carico dei pot della chitarra (capacità propria e cavo in caps[0])
         gIn = 1.0 / pickup.R;
         addG (PU, GND, gIn);
+        addR (IN, GND, pickup.Rload);
         indG = withCaps ? 1.0 / (2.0 * fs * pickup.L) : 1.0;   // in continua: cortocircuito
         addG (PU, IN, indG);
         addR (K1, B1, C::R1);  addR (K1, RAIL, C::R2);
@@ -216,6 +257,75 @@ private:
             for (size_t k = 0; k < NP; ++k) Q[r][k] = Ainv[r][(size_t) curNode[k]];
         for (size_t r = 0; r < NP; ++r)
             for (size_t k = 0; k < NP; ++k) K[r][k] = P[r][(size_t) curNode[k]];
+
+        // termine noto: b = b0 + Bu·vin + Bx·x  (Bx: ±1 sui nodi di ogni elemento reattivo)
+        std::array<double, NN> b0 = bConst;
+        for (auto& c : caps) if (c.j == RAIL && c.i >= 0) b0[(size_t) c.i] += c.geq * C::Vcc;
+        auto bxCol = [this] (size_t k, size_t node) -> double
+        {
+            if (k < (size_t) NC)
+            {
+                const auto& c = caps[k];
+                return (c.i == (int) node ? 1.0 : 0.0) - (c.j == (int) node ? 1.0 : 0.0);
+            }
+            return (node == (size_t) IN ? 1.0 : 0.0) - (node == (size_t) PU ? 1.0 : 0.0);   // induttanza
+        };
+
+        // nodi: v = m0 + mu·vin + Mx·x + mi·i
+        for (size_t r = 0; r < NN; ++r)
+        {
+            double a0 = 0.0;
+            for (size_t c = 0; c < NN; ++c) a0 += Ainv[r][c] * b0[c];
+            m0[r] = a0;
+            mu[r] = Ainv[r][PU] * gIn;
+            for (size_t k = 0; k < NS; ++k)
+            {
+                double a = 0.0;
+                for (size_t c = 0; c < NN; ++c) { const double bx = bxCol (k, c); if (std::abs (bx) > 0.5) a += Ainv[r][c] * bx; }
+                Mx[r][k] = a;
+            }
+            for (size_t k = 0; k < NP; ++k) mi[r][k] = -Q[r][k];
+        }
+
+        // giunzioni: p0 = pc + pIn·vin + Px·x
+        for (size_t r = 0; r < NP; ++r)
+        {
+            const int bn = bN[r / 2], cn = cN[r / 2];
+            auto pick = [&] (const std::array<double, NN>& vec) { return vec[(size_t) bn] - (r % 2 ? vec[(size_t) cn] : 0.0); };
+            pc[r] = pick (m0); pIn[r] = pick (mu);
+            for (size_t k = 0; k < NS; ++k)
+                Px[r][k] = Mx[(size_t) bn][k] - (r % 2 ? Mx[(size_t) cn][k] : 0.0);
+        }
+
+        // aggiornamento degli stati: x' = d0 + bu·vin + Ax·x + Ci·i
+        for (size_t r = 0; r < NS; ++r)
+        {
+            // riga r della matrice di aggiornamento (differenza di nodi pesata) applicata a un vettore di nodi
+            auto applyRow = [&] (auto&& nodeVal) -> double
+            {
+                if (r < (size_t) NC)
+                {
+                    const auto& c = caps[r];
+                    const double vi = c.i >= 0 ? nodeVal ((size_t) c.i) : 0.0;
+                    const double vj = c.j >= 0 ? nodeVal ((size_t) c.j) : 0.0;
+                    return 2.0 * c.geq * (vi - vj);
+                }
+                return 2.0 * indG * (nodeVal ((size_t) PU) - nodeVal ((size_t) IN));
+            };
+            const double selfTerm = r < (size_t) NC ? -1.0 : 1.0;            // -J (condensatori), +H (induttanza)
+            const double railTerm = (r < (size_t) NC && caps[r].j == RAIL) ? -2.0 * caps[r].geq * C::Vcc : 0.0;
+            d0[r] = applyRow ([&] (size_t n) { return m0[n]; }) + railTerm;
+            bu[r] = applyRow ([&] (size_t n) { return mu[n]; });
+            for (size_t k = 0; k < NS; ++k)
+                Ax[r][k] = applyRow ([&] (size_t n) { return Mx[n][k]; }) + (k == r ? selfTerm : 0.0);
+            for (size_t k = 0; k < NP; ++k)
+                Ci[r][k] = applyRow ([&] (size_t n) { return mi[n][k]; });
+        }
+
+        // uscita: cursore del VOLUME
+        yc = m0[WV]; yu = mu[WV];
+        for (size_t k = 0; k < NS; ++k) yx[k] = Mx[WV][k];
+        for (size_t k = 0; k < NP; ++k) yi[k] = mi[WV][k];
     }
 
     // Esponenziale di giunzione con prolungamento lineare oltre vmax: continuo e con
@@ -223,6 +333,7 @@ private:
     static inline void junctionExp (double v, double& e, double& de)
     {
         constexpr double vmax = 1.0;
+        if (v < -1.0) { e = 0.0; de = 0.0; return; }   // giunzione interdetta: exp(-38) è trascurabile
         if (v <= vmax) { e = std::exp (v / BJT::Vt); de = e / BJT::Vt; }
         else
         {
@@ -298,15 +409,26 @@ private:
             solve4 (J);
 
             double maxStep = 0.0;
+            std::array<double, NP> dp {};
             for (size_t r = 0; r < NP; ++r)
             {
                 double vn = p[r] + J[r][NP];
                 vn = pnjlim (vn, p[r]);
                 vn = std::clamp (vn, -12.0, 1.5);           // fuori da qui non è fisico
-                maxStep = std::max (maxStep, std::abs (vn - p[r]));
+                dp[r] = vn - p[r];
+                maxStep = std::max (maxStep, std::abs (dp[r]));
                 p[r] = vn;
             }
-            if (maxStep < 1e-9) break;
+            if (maxStep < 1e-6)
+            {
+                // convergenza: correnti aggiornate al primo ordine, senza altri esponenziali
+                for (size_t c = 0; c < 2; ++c)
+                {
+                    cur[c]     += d1[c][0] * dp[0] + d1[c][1] * dp[1];
+                    cur[c + 2] += d2[c][0] * dp[2] + d2[c][1] * dp[3];
+                }
+                return;
+            }
         }
         double dd[2][2];
         ebersMoll (p[0], p[1], cur[0], cur[1], dd);
@@ -357,28 +479,42 @@ private:
     // Punto di lavoro in continua (condensatori aperti), poi inizializza la storia
     void solveOperatingPoint()
     {
-        build (false);
+        build (false);                       // condensatori aperti, induttanza in corto
+        x.fill (0.0);
         pState = { 0.6, -6.0, 0.6, -1.4 };
-        std::array<double, NN> b = bConst;
         std::array<double, NP> p0 {}, cur {};
-        for (size_t r = 0; r < NP; ++r)
-        {
-            double s = 0.0;
-            for (size_t k = 0; k < NN; ++k) s += P[r][k] * b[k];
-            p0[r] = s;
-        }
+        for (size_t r = 0; r < NP; ++r) p0[r] = pc[r];
         newton (p0, cur, 200);
+        pPrev = pState;
+        std::array<double, NN> vdc {};
         for (size_t r = 0; r < NN; ++r)
         {
-            double s = 0.0;
-            for (size_t k = 0; k < NN; ++k) s += Ainv[r][k] * b[k];
-            for (size_t k = 0; k < NP; ++k) s -= Q[r][k] * cur[k];
-            v[r] = s;
+            double acc = m0[r];
+            for (size_t k = 0; k < NP; ++k) acc += mi[r][k] * cur[k];
+            vdc[r] = acc;
         }
         build (true);
-        for (auto& c : caps) c.J = c.geq * capVoltage (c);   // corrente nulla a regime
-        indH = indG * (v[PU] - v[IN]);                           // corrente nulla (v ≈ 0 in continua)
+        inputCorrection.reset();
+        for (size_t k = 0; k < (size_t) NC; ++k) x[k] = caps[k].geq * capVoltage (caps[k], vdc);   // corrente nulla a regime
+        x[NC] = indG * (vdc[PU] - vdc[IN]);                                                          // idem per l'induttanza
+        lastX = x; lastVin = 0.0; lastCur = cur;
         dcBlock.reset();
+    }
+
+    // La scheda audio registra il pick-up quasi "a vuoto" (ingresso Hi-Z da 1 MΩ): il
+    // segnale contiene già la risonanza della bobina con la propria capacità, il cavo e
+    // i pot della chitarra. Nel FY-2, che carica il pick-up con pochi kΩ, quella risonanza
+    // non c'è. Si ricostruisce quindi la forza elettromotrice del pick-up con l'inverso del
+    // partitore registrato, limitato sopra i 10 kHz per non esaltare il fruscio della scheda.
+    void updateInputCorrection()
+    {
+        if (pickup.ideal_) { inputCorrection.set (1, 0, 0, 1, 0, 0, fs); inputCorrection.reset(); return; }
+        const double G = 1.0 / pickup.Rload + 1.0 / 1.0e6;            // pot + ingresso Hi-Z
+        const double Ct = pickup.C + Components::Ccable;
+        const double R = pickup.R, L = pickup.L, n0 = 1.0 + R * G;
+        const double wp = 2.0 * kPi * 10000.0;
+        inputCorrection.set (1.0, (L * G + R * Ct) / n0, L * Ct / n0,
+                             1.0, 2.0 / wp, 1.0 / (wp * wp), fs);
     }
 
     struct OnePole
@@ -389,15 +525,27 @@ private:
         inline double hp (double x) { const double u = (x - s) * g; const double y = u + s; s = y + u; return x - y; }
     };
 
-    double fs = 192000.0, fuzzPos = 0.7, volPos = 0.5, gIn = 0.0, indG = 0.0, indH = 0.0;
+    double fs = 192000.0, fuzzPos = 0.7, volPos = 0.5, gIn = 0.0, indG = 0.0;
     Pickup pickup = Pickup::singleCoil();
     std::array<std::array<double, NN>, NN> Ainv {};
     std::array<std::array<double, NN>, NP> P {};
     std::array<std::array<double, NP>, NN> Q {};
     std::array<std::array<double, NP>, NP> K {};
-    std::array<double, NN> bConst {}, v {};
-    std::array<double, NP> pState { 0.6, -6.0, 0.6, -1.4 };
+    std::array<double, NN> bConst {};
+
+    // forma a variabili di stato (vedi build())
+    std::array<double, NS> x {}, lastX {}, d0 {}, bu {}, yx {};
+    std::array<std::array<double, NS>, NS> Ax {};
+    std::array<std::array<double, NP>, NS> Ci {};
+    std::array<std::array<double, NS>, NP> Px {};
+    std::array<double, NP> pc {}, pIn {}, yi {}, lastCur {};
+    std::array<double, NN> m0 {}, mu {};
+    std::array<std::array<double, NS>, NN> Mx {};
+    std::array<std::array<double, NP>, NN> mi {};
+    double yc = 0.0, yu = 0.0, lastVin = 0.0;
+    std::array<double, NP> pState { 0.6, -6.0, 0.6, -1.4 }, pPrev { 0.6, -6.0, 0.6, -1.4 };
     OnePole dcBlock;
+    AnalogBiquad inputCorrection;
 };
 
 } // namespace pf2

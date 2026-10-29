@@ -365,11 +365,14 @@ void PF2FuzzEditor::renderBackground()
     // texture generate alla risoluzione reale della finestra
     const Rectangle<float> body (20.0f, pedalY + 14.0f, 380.0f, 656.0f);
     const Rectangle<float> panel (40.0f, pedalY + 214.0f, 340.0f, 262.0f);
-    const auto crinkle = makeCrinkle (roundToInt (body.getWidth() * scale), roundToInt (body.getHeight() * scale), scale);
-    const auto steel = makeSteel (roundToInt (panel.getWidth() * scale), roundToInt (panel.getHeight() * scale), scale,
-                                  panel.getWidth(), panel.getHeight());
+    // texture generate una sola volta alla risoluzione massima della finestra (2x) e
+    // condivise fra tutte le istanze: il ridimensionamento non le ricalcola
+    static const Image crinkle = makeCrinkle (roundToInt (body.getWidth() * 2.0f), roundToInt (body.getHeight() * 2.0f), 2.0f);
+    static const Image steel = makeSteel (roundToInt (panel.getWidth() * 2.0f), roundToInt (panel.getHeight() * 2.0f), 2.0f,
+                                          panel.getWidth(), panel.getHeight());
 
     g.addTransform (AffineTransform::scale (scale));
+    g.setImageResamplingQuality (Graphics::highResamplingQuality);
     g.fillAll (Colour (0xff08080a));
 
     // barra di servizio (non fa parte del pedale)
@@ -518,9 +521,9 @@ void PF2FuzzEditor::timerCallback()
     if (pu != lastPickup)
     {
         lastPickup = pu;
+        // R e L si regolano solo in "Personalizzato": con i preset i valori sono nel nome
         const bool custom = pu == 4;
-        pickR.setEnabled (custom); pickL.setEnabled (custom);
-        pickR.setAlpha (custom ? 1.0f : 0.35f); pickL.setAlpha (custom ? 1.0f : 0.35f);
+        pickR.setVisible (custom); pickL.setVisible (custom);
     }
     if (learn >= 0 || learn != lastLearn || mv != lastMapVersion || cnt != lastCCCount || byp != lastBypass)
     {

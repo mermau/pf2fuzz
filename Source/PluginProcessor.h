@@ -96,6 +96,8 @@ private:
     std::atomic<int> learningParam { -1 }, mapVersion { 0 };
 
     int maxBlock = 512, osChannels = 2;
+    int bypassFadeSamples = 4000, bypassFadeLeft = 0;
+    bool lastBypassState = false, circuitIdle = false;
 
     static constexpr int controlBlock = 32;       // campioni (frequenza base)
     static constexpr float voltsPerFS = 1.0f;     // 0 dBFS = 1 V di picco
