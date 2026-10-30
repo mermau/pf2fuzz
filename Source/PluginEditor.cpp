@@ -261,38 +261,44 @@ void Footswitch::mouseDown (const juce::MouseEvent& e)
 }
 
 // interruttore a pedale rotondo come sull'originale: ghiera zigrinata e pulsante cromato
-void Footswitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
+void Footswitch::paintButton (juce::Graphics& g, bool, bool down)
 {
     using namespace juce;
     const auto b = getLocalBounds().toFloat();
     const float k = jmin (b.getWidth(), b.getHeight()) / 84.0f;
-    const auto c0 = b.getCentre();
-    const auto c = c0.translated (0.0f, down ? 1.2f * k : 0.0f);
+    const auto c = b.getCentre();
 
     g.setColour (Colours::black.withAlpha (0.45f));
-    g.fillEllipse (Rectangle<float> (62 * k, 62 * k).withCentre (c0.translated (0, 4 * k)));
+    g.fillEllipse (Rectangle<float> (62 * k, 62 * k).withCentre (c.translated (0, 4 * k)));
 
     // rondella cromata
-    g.setGradientFill (chrome (c0, 29.0f * k, 0.15f));
-    g.fillEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c0));
+    g.setGradientFill (chrome (c, 29.0f * k, 0.15f));
+    g.fillEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c));
     g.setColour (Colour (0xff3b3d41));
-    g.drawEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c0), 1.0f);
+    g.drawEllipse (Rectangle<float> (58 * k, 58 * k).withCentre (c), 1.0f);
 
     // ghiera zigrinata
     g.setColour (Colour (0xff6e7278));
-    g.fillEllipse (Rectangle<float> (46 * k, 46 * k).withCentre (c0));
+    g.fillEllipse (Rectangle<float> (46 * k, 46 * k).withCentre (c));
     g.setColour (Colour (0xff3f4246));
     for (int i = 0; i < 48; ++i)
     {
         const float a = (float) i * MathConstants<float>::twoPi / 48.0f;
-        g.drawLine (Line<float> (c0.getPointOnCircumference (20.5f * k, a), c0.getPointOnCircumference (23.0f * k, a)), 1.4f * k);
+        g.drawLine (Line<float> (c.getPointOnCircumference (20.5f * k, a), c.getPointOnCircumference (23.0f * k, a)), 1.4f * k);
     }
 
-    // pulsante
-    g.setGradientFill (chrome (c, 17.0f * k, down ? 0.3f : (highlighted ? -0.05f : 0.0f)));
-    g.fillEllipse (Rectangle<float> (34 * k, 34 * k).withCentre (c));
+    // pulsante: premuto, affonda nella ghiera (vista dall'alto appare più piccolo e
+    // lascia scoperta la sede scura), senza ombre né cambi di luminosità
+    const float capD = (down ? 30.0f : 34.0f) * k;
+    if (down)
+    {
+        g.setColour (Colour (0xff1c1d20));
+        g.fillEllipse (Rectangle<float> (35 * k, 35 * k).withCentre (c));
+    }
+    g.setGradientFill (chrome (c, capD * 0.5f));
+    g.fillEllipse (Rectangle<float> (capD, capD).withCentre (c));
     g.setColour (Colours::black.withAlpha (0.35f));
-    g.drawEllipse (Rectangle<float> (34 * k, 34 * k).withCentre (c), 0.8f);
+    g.drawEllipse (Rectangle<float> (capD, capD).withCentre (c), 0.8f);
 }
 
 //==============================================================================
