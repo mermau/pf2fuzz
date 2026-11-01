@@ -40,6 +40,7 @@ jobs:
           cp scripts/installa.command "dist/FYN-2/Installa FYN-2.command"
           chmod +x "dist/FYN-2/Installa FYN-2.command"
           cp README.md "dist/FYN-2/"
+          cp -R docs/manuale "dist/FYN-2/Manuale"   # aprire Manuale/index.html nel browser
           lipo -info "dist/FYN-2/FYN-2.vst3/Contents/MacOS/FYN-2"
           ls "dist/FYN-2/FYN-2.app/Contents/Resources/"   # deve contenere Icon.icns
           (cd dist && ditto -c -k --keepParent "FYN-2" ../FYN2-macOS.zip)

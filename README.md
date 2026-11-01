@@ -4,6 +4,13 @@ Plugin in C++17 con JUCE 8. Riferimento: lo schema dell'originale Shin-ei FY-2 (
 NEC 2SC536 classe F, pot Cosmos B50K), che nei valori coincide con la replica GGG "SECF" priva
 delle aggiunte moderne e con il kit FuzzDog FY2 V3 senza SCOOP né boost.
 
+## Manuale d'uso
+
+Il manuale per i musicisti (storia del fuzz e del FY-2, comandi, calibrazione dell'ingresso,
+pannello Interno, MIDI, consigli d'uso) è in [`docs/manuale/index.html`](docs/manuale/index.html):
+aprilo nel browser; per un PDF usa il comando Stampa. Nello zip di installazione si trova nella
+cartella `Manuale`.
+
 ## Comandi
 
 Come sul pedale originale: **FUZZ**, **VOLUME** (entrambi 50k lineari) e **footswitch**.

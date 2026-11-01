@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FYN-2 Fuzz Box — Manuale d'uso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Yellowtail&display=swap" rel="stylesheet">
+<style>
+:root{
+  --martellato:#1c1d20;   /* vernice nera del pedale */
+  --acciaio:#c7cbd0;      /* pannello spazzolato */
+  --carta:#e8eaed;        /* pagina: acciaio chiaro, non crema */
+  --inchiostro:#222428;
+  --grafite:#5b6068;
+  --rosso:#c4232b;        /* targhetta Collateral */
+  --verde:#1f3b2d;        /* basetta del pannello INTERNO */
+  --filo:#c2c6cc;
+  --measure:66ch;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--carta);color:var(--inchiostro);
+  font-family:"Archivo",system-ui,sans-serif;font-variation-settings:"wdth" 100;
+  font-size:17px;line-height:1.6;font-feature-settings:"kern","liga","tnum" 0}
+a{color:inherit;text-decoration-color:var(--rosso);text-decoration-thickness:1.5px;text-underline-offset:3px}
+a:hover{color:var(--rosso)}
+:focus-visible{outline:3px solid var(--rosso);outline-offset:3px;border-radius:2px}
+img{max-width:100%;height:auto;display:block}
+.nw{white-space:nowrap}
+
+/* ---------- copertina ---------- */
+.cover{position:relative;color:#eef0f2;overflow:hidden;
+  background-color:var(--martellato);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .52 0 0 0 .13 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+.cover-inner{max-width:1240px;margin:0 auto;padding:clamp(28px,5vw,56px) clamp(20px,4vw,48px) 0;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:clamp(24px,4vw,64px);align-items:center}
+.brand{display:inline-flex;flex-direction:column;align-items:center;background:var(--rosso);
+  border-radius:7px;padding:6px 18px 8px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35),0 3px 0 #7d151b}
+.brand b{font-family:"Yellowtail",cursive;font-weight:400;font-size:30px;line-height:1.1;color:#f3f3f3}
+.brand small{font-size:10px;letter-spacing:.5em;font-weight:700;margin-right:-.5em;color:#fff}
+.title{margin:clamp(28px,5vw,64px) 0 0;line-height:.82;font-weight:900;
+  font-variation-settings:"wdth" 125;font-size:clamp(68px,11.5vw,178px);letter-spacing:-.02em;color:#f2f3f4;white-space:nowrap}
+.subtitle{margin:18px 0 0;max-width:34ch;font-size:clamp(18px,2vw,22px);line-height:1.4;color:#c9cdd3;
+  font-variation-settings:"wdth" 92}
+.subtitle strong{color:#fff;font-weight:600}
+.edition{margin:26px 0 clamp(36px,5vw,56px);font-size:14px;color:#9aa0a8;font-variation-settings:"wdth" 88}
+.cover-pedal{padding-bottom:clamp(36px,5vw,56px)}
+.cover-pedal img{height:min(68vh,600px);width:auto;max-width:none;filter:drop-shadow(0 26px 34px rgba(0,0,0,.6))}
+/* la fascia d'acciaio: il segnale entra pulito ed esce squadrato */
+.steel{position:relative;z-index:1;height:clamp(150px,18vw,210px);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 18%,rgba(0,0,0,0) 80%,rgba(0,0,0,.18)),
+    repeating-linear-gradient(0deg,#cfd3d8 0 1px,#bfc3c9 1px 2px,#d6d9dd 2px 4px,#c4c8cd 4px 5px),
+    var(--acciaio);
+  border-top:1px solid #f4f5f6;border-bottom:1px solid #8d9299;display:flex;align-items:center}
+.steel-inner{max-width:1240px;width:100%;margin:0 auto;padding:0 clamp(20px,4vw,48px);
+  display:grid;grid-template-columns:auto 1fr;align-items:center;gap:clamp(16px,3vw,40px)}
+.steel-word{font-weight:900;font-variation-settings:"wdth" 125;color:#17181a;
+  font-size:clamp(30px,4.6vw,60px);letter-spacing:.18em;white-space:nowrap;line-height:1}
+.steel svg{width:100%;height:clamp(70px,9vw,120px);overflow:visible}
+.wave{fill:none;stroke:#17181a;stroke-width:3;stroke-linejoin:round;
+  stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 2.6s cubic-bezier(.55,.1,.25,1) .35s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.wave{animation:none;stroke-dashoffset:0}}
+.steel-caption{position:absolute;right:clamp(20px,4vw,48px);bottom:10px;font-size:12px;color:#4b5057;
+  font-variation-settings:"wdth" 85}
+
+/* ---------- impaginazione ---------- */
+.layout{max-width:1240px;margin:0 auto;padding:clamp(40px,6vw,80px) clamp(20px,4vw,48px) 96px;
+  display:grid;grid-template-columns:230px minmax(0,1fr);gap:clamp(28px,5vw,80px)}
+nav.toc{position:sticky;top:28px;align-self:start;font-size:14.5px;line-height:1.35;
+  font-variation-settings:"wdth" 88}
+.toc p{margin:0 0 14px;font-weight:700;font-size:13px;color:var(--grafite)}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:c}
+.toc li{counter-increment:c}
+.toc a{display:grid;grid-template-columns:2.1em 1fr;padding:6px 0;text-decoration:none;color:var(--grafite);
+  border-top:1px solid var(--filo)}
+.toc a::before{content:counter(c);font-weight:800;color:#8a9098;font-feature-settings:"tnum"}
+.toc a:hover,.toc a[aria-current="true"]{color:var(--inchiostro)}
+.toc a[aria-current="true"]::before{color:var(--rosso)}
+main{min-width:0}
+section.ch{counter-increment:ch;padding-top:12px;margin-bottom:clamp(64px,8vw,104px)}
+main{counter-reset:ch}
+.ch>h2{position:relative;margin:0 0 28px;font-weight:900;font-variation-settings:"wdth" 118;
+  font-size:clamp(34px,4.2vw,52px);line-height:1.02;letter-spacing:-.01em;max-width:18ch}
+.ch>h2::before{content:counter(ch);display:block;font-size:15px;font-weight:800;letter-spacing:0;
+  font-variation-settings:"wdth" 100;color:var(--rosso);margin-bottom:10px;
+  border-top:3px solid var(--inchiostro);padding-top:10px;width:64px}
+h3{margin:44px 0 10px;font-weight:800;font-variation-settings:"wdth" 108;font-size:22px;line-height:1.2}
+h4{margin:28px 0 6px;font-weight:700;font-size:17.5px}
+p,ul,ol,dl{max-width:var(--measure)}
+p{margin:0 0 1em;hyphens:auto}
+.lead{font-size:clamp(19px,1.8vw,21.5px);line-height:1.55;font-variation-settings:"wdth" 96;max-width:60ch}
+ul,ol{padding-left:1.2em}
+li{margin:.3em 0}
+.ctl{display:inline-block;font-weight:800;font-size:.8em;letter-spacing:.06em;font-variation-settings:"wdth" 112;
+  background:linear-gradient(#d7dade,#bcc1c7);color:#17181a;padding:.05em .45em .02em;border-radius:3px;
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.18);white-space:nowrap;vertical-align:.06em}
+kbd,code{font-family:"Archivo",sans-serif;font-variation-settings:"wdth" 90;font-weight:600;
+  background:#fff;border:1px solid var(--filo);border-radius:4px;padding:.05em .4em;font-size:.92em}
+pre{max-width:var(--measure);background:var(--martellato);color:#e6e8eb;padding:14px 18px;border-radius:6px;
+  overflow:auto;font-size:15px;font-variation-settings:"wdth" 90}
+pre code{background:none;border:0;padding:0;color:inherit;font-weight:500}
+
+/* tabelle */
+.table-wrap{max-width:var(--measure);overflow-x:auto;margin:18px 0 26px}
+table{border-collapse:collapse;width:100%;font-size:15.5px;font-variation-settings:"wdth" 94}
+caption{text-align:left;font-weight:700;font-size:14px;color:var(--grafite);padding-bottom:8px}
+th,td{text-align:left;padding:9px 14px 9px 0;border-bottom:1px solid var(--filo);vertical-align:top}
+th{font-weight:700;border-bottom:2px solid var(--inchiostro)}
+td.n,th.n{font-feature-settings:"tnum";white-space:nowrap}
+
+/* cronologia: è davvero una sequenza */
+.timeline{list-style:none;padding:0;margin:30px 0 34px;max-width:var(--measure);position:relative}
+.timeline::before{content:"";position:absolute;left:5.1em;top:6px;bottom:6px;width:2px;background:var(--inchiostro)}
+.timeline li{display:grid;grid-template-columns:4.2em 1fr;gap:1.9em;margin:0 0 18px;position:relative}
+.timeline li::after{content:"";position:absolute;left:calc(5.1em - 5px);top:.55em;width:12px;height:12px;border-radius:50%;
+  background:var(--carta);border:2px solid var(--inchiostro)}
+.timeline time{font-weight:900;font-variation-settings:"wdth" 112;font-size:20px;line-height:1.3;text-align:right;
+  font-feature-settings:"tnum"}
+.timeline .fy2 time{color:var(--rosso)}
+.timeline .fy2::after{background:var(--rosso);border-color:var(--rosso)}
+.timeline .fy2 div{font-weight:600}
+
+/* qualità del suono */
+dl.traits{margin:24px 0;display:grid;grid-template-columns:1fr;gap:0}
+dl.traits div{border-top:1px solid var(--filo);padding:16px 0 4px;display:grid;grid-template-columns:13em 1fr;gap:20px}
+dl.traits dt{font-weight:800;font-variation-settings:"wdth" 104;line-height:1.3}
+dl.traits dd{margin:0}
+
+/* figure annotate */
+figure{margin:34px 0 40px}
+.annotated{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:clamp(24px,4vw,52px);align-items:start}
+.shot{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px rgba(20,22,26,.28);background:var(--martellato)}
+.pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;
+  background:var(--rosso);color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center;
+  box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.45);font-feature-settings:"tnum";font-variation-settings:"wdth" 90}
+.legend{margin:0;padding:0;list-style:none;counter-reset:l;font-size:16px}
+.legend li{counter-increment:l;display:grid;grid-template-columns:30px 1fr;gap:12px;padding:9px 0;margin:0;border-top:1px solid var(--filo)}
+.legend li::before{content:counter(l);width:24px;height:24px;border-radius:50%;background:var(--rosso);color:#fff;
+  font-size:12.5px;font-weight:800;display:grid;place-items:center;margin-top:1px}
+.legend a{font-weight:600}
+figcaption{font-size:14px;color:var(--grafite);margin-top:12px;max-width:var(--measure)}
+.pair{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0 6px}
+.pair figure{margin:0;flex:1 1 200px;max-width:270px}
+.pair img{border-radius:10px}
+
+/* note di lavoro */
+.note{max-width:var(--measure);margin:24px 0;padding:16px 20px 6px;border-left:4px solid var(--rosso);background:#f4f5f7}
+.note.pcb{border-left-color:var(--verde);background:#e3e9e5}
+.note h4{margin:0 0 6px;font-size:16px}
+.note p{font-size:16px}
+
+/* punti di partenza */
+.patches{max-width:760px;margin:26px 0;border-top:2px solid var(--inchiostro)}
+.patch{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;padding:18px 0;border-bottom:1px solid var(--filo);align-items:center}
+.patch h4{margin:0 0 4px}
+.patch p{margin:0;font-size:15.5px}
+.patch .set{font-size:13.5px;color:var(--grafite);margin-top:6px;font-variation-settings:"wdth" 90}
+.knobs{display:flex;gap:14px}
+.knob{text-align:center;font-size:11px;font-weight:800;letter-spacing:.08em;font-variation-settings:"wdth" 112;color:#2d3035}
+.knob svg{width:62px;height:62px;display:block;margin:0 auto 3px}
+.formula{max-width:var(--measure);margin:22px 0;padding:22px 24px;background:var(--martellato);color:#eef0f2;border-radius:8px}
+.formula p{margin:0}
+.formula .eq{font-size:clamp(20px,2.4vw,26px);font-weight:800;font-variation-settings:"wdth" 110;line-height:1.35}
+.formula .eq span{color:#ff8d8f}
+.formula small{display:block;margin-top:10px;color:#b4b9c0;font-size:14.5px}
+.sources li{font-size:15px}
+footer{background:var(--martellato);color:#a7adb5;font-size:14px}
+footer div{max-width:1240px;margin:0 auto;padding:36px clamp(20px,4vw,48px);display:flex;flex-wrap:wrap;gap:18px 40px;justify-content:space-between}
+footer .brand{transform:scale(.8);transform-origin:left center}
+
+/* ---------- schermi piccoli ---------- */
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr}
+  nav.toc{position:static}
+  .toc ol{columns:2;column-gap:28px}
+  .annotated{grid-template-columns:1fr}
+  .annotated .shot{max-width:400px}
+}
+@media (max-width:760px){
+  .cover-inner{grid-template-columns:1fr}
+  .cover-pedal img{height:auto;width:min(78vw,320px);margin:0 auto}
+  .steel-inner{grid-template-columns:1fr;gap:4px}
+  .steel{height:auto;padding:18px 0 30px}
+  dl.traits div{grid-template-columns:1fr;gap:4px}
+  .toc ol{columns:1}
+  .patch{grid-template-columns:1fr}
+  body{font-size:16.5px}
+}
+
+/* ---------- stampa (Salva come PDF) ---------- */
+@media print{
+  @page{size:A4;margin:16mm 16mm 18mm}
+  body{background:#fff;font-size:10.5pt}
+  nav.toc,.steel-caption{display:none}
+  .layout{display:block;padding:0}
+  .cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;break-after:page}
+  .steel,.formula,.brand,.pin,.legend li::before,.ctl,pre,footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wave{animation:none;stroke-dashoffset:0}
+  section.ch{break-before:page;margin-bottom:0}
+  figure,.note,.patch,table,.timeline li,dl.traits div{break-inside:avoid}
+  h2,h3,h4{break-after:avoid}
+  a{text-decoration:none}
+  .shot{box-shadow:none}
+  .title{font-size:84px}
+  .cover-pedal img{height:105mm}
+  .steel{height:120px}
+  .annotated{grid-template-columns:68mm 1fr;break-inside:avoid;gap:10mm}
+  .annotated .shot{max-width:68mm}
+  .legend{font-size:10pt}
+}
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="cover-inner">
+    <div>
+      <span class="brand" aria-label="Collateral Effects"><b>Collateral</b><small>EFFECTS</small></span>
+      <h1 class="title">FYN-2</h1>
+      <p class="subtitle">Manuale d'uso del plugin che emula il <strong style="white-space:nowrap">Shin-ei Companion</strong> <strong>Fuzz Box FY-2</strong>, il fuzz giapponese della fine degli anni Sessanta.</p>
+      <p class="edition">Versione 1.1 per macOS: VST3, Audio Unit e applicazione Standalone</p>
+    </div>
+    <div class="cover-pedal"><img src="img/pedal.webp" width="764" height="1316" alt="Il pedale FYN-2 come appare nel plugin: vernice nera martellata, interruttore a pedale con LED rosso, pannello d'acciaio con le manopole VOL e FUZZ e targhetta rossa Collateral Effects."></div>
+  </div>
+  <div class="steel">
+    <div class="steel-inner">
+      <span class="steel-word" aria-hidden="true">FUZZ BOX</span>
+      <svg viewBox="0 0 1400 120" preserveAspectRatio="none" role="img" aria-label="Un'onda sinusoidale che, procedendo verso destra, viene schiacciata fino a diventare un'onda quadra.">
+        <path class="wave" d="M0,46.8 L2,42.6 L4,38.7 L6,34.9 L8,31.5 L10,28.3 L12,25.5 L14,23.0 L16,20.8 L18,19.1 L20,17.7 L22,16.7 L24,16.2 L26,16.0 L28,16.3 L30,16.9 L32,18.0 L34,19.5 L36,21.3 L38,23.6 L40,26.2 L42,29.1 L44,32.3 L46,35.9 L48,39.6 L50,43.6 L52,47.8 L54,52.1 L56,56.5 L58,61.0 L60,65.4 L62,69.8 L64,74.1 L66,78.2 L68,82.1 L70,85.8 L72,89.2 L74,92.3 L76,95.1 L78,97.5 L80,99.6 L82,101.2 L84,102.5 L86,103.4 L88,103.9 L90,104.0 L92,103.7 L94,102.9 L96,101.8 L98,100.3 L100,98.4 L102,96.1 L104,93.5 L106,90.5 L108,87.2 L110,83.6 L112,79.8 L114,75.7 L116,71.5 L118,67.1 L120,62.7 L122,58.2 L124,53.7 L126,49.3 L128,45.0 L130,40.9 L132,37.0 L134,33.4 L136,30.0 L138,27.0 L140,24.3 L142,21.9 L144,20.0 L146,18.4 L148,17.2 L150,16.4 L152,16.1 L154,16.0 L156,16.4 L158,17.2 L160,18.4 L162,19.9 L164,21.8 L166,24.1 L168,26.7 L170,29.7 L172,33.0 L174,36.7 L176,40.6 L178,44.7 L180,49.0 L182,53.5 L184,58.1 L186,62.7 L188,67.3 L190,71.8 L192,76.1 L194,80.3 L196,84.2 L198,87.8 L200,91.1 L202,94.0 L204,96.6 L206,98.8 L208,100.6 L210,102.0 L212,103.0 L214,103.7 L216,104.0 L218,103.9 L220,103.5 L222,102.7 L224,101.6 L226,100.1 L228,98.2 L230,96.0 L232,93.4 L234,90.4 L236,87.1 L238,83.5 L240,79.5 L242,75.2 L244,70.7 L246,66.0 L248,61.1 L250,56.3 L252,51.5 L254,46.8 L256,42.3 L258,38.0 L260,34.1 L262,30.6 L264,27.4 L266,24.7 L268,22.3 L270,20.4 L272,18.8 L274,17.6 L276,16.7 L278,16.2 L280,16.0 L282,16.1 L284,16.5 L286,17.3 L288,18.3 L290,19.7 L292,21.4 L294,23.5 L296,25.9 L298,28.8 L300,32.1 L302,35.8 L304,40.0 L306,44.5 L308,49.3 L310,54.4 L312,59.7 L314,65.0 L316,70.3 L318,75.3 L320,80.0 L322,84.4 L324,88.2 L326,91.6 L328,94.6 L330,97.0 L332,99.1 L334,100.7 L336,101.9 L338,102.9 L340,103.5 L342,103.9 L344,104.0 L346,103.9 L348,103.5 L350,102.9 L352,102.0 L354,100.9 L356,99.4 L358,97.6 L360,95.3 L362,92.6 L364,89.4 L366,85.7 L368,81.3 L370,76.4 L372,71.0 L374,65.2 L376,59.2 L378,53.2 L380,47.3 L382,41.8 L384,36.8 L386,32.4 L388,28.7 L390,25.6 L392,23.0 L394,21.0 L396,19.4 L398,18.2 L400,17.3 L402,16.7 L404,16.3 L406,16.1 L408,16.0 L410,16.1 L412,16.4 L414,16.9 L416,17.5 L418,18.4 L420,19.5 L422,21.0 L424,22.9 L426,25.3 L428,28.3 L430,32.1 L432,36.6 L434,42.0 L436,48.3 L438,55.1 L440,62.2 L442,69.4 L444,76.1 L446,82.1 L448,87.2 L450,91.5 L452,94.8 L454,97.4 L456,99.4 L458,100.9 L460,101.9 L462,102.7 L464,103.3 L466,103.6 L468,103.9 L470,104.0 L472,104.0 L474,103.9 L476,103.7 L478,103.4 L480,103.0 L482,102.4 L484,101.6 L486,100.6 L488,99.1 L490,97.1 L492,94.4 L494,90.7 L496,86.0 L498,80.0 L500,72.7 L502,64.4 L504,55.7 L506,47.2 L508,39.6 L510,33.2 L512,28.3 L514,24.5 L516,21.8 L518,19.9 L520,18.6 L522,17.7 L524,17.1 L526,16.6 L528,16.3 L530,16.2 L532,16.1 L534,16.0 L536,16.0 L538,16.1 L540,16.2 L542,16.3 L544,16.6 L546,16.9 L548,17.4 L550,18.1 L552,19.1 L554,20.7 L556,22.9 L558,26.3 L560,31.1 L562,37.8 L564,46.4 L566,56.5 L568,67.2 L570,77.2 L572,85.5 L574,91.7 L576,96.0 L578,98.9 L580,100.8 L582,102.0 L584,102.8 L586,103.2 L588,103.5 L590,103.7 L592,103.9 L594,103.9 L596,104.0 L598,104.0 L600,104.0 L602,104.0 L604,103.9 L606,103.8 L608,103.7 L610,103.6 L612,103.3 L614,102.9 L616,102.2 L618,101.1 L620,99.4 L622,96.4 L624,91.7 L626,84.5 L628,74.4 L630,61.9 L632,48.9 L634,37.7 L636,29.4 L638,23.9 L640,20.6 L642,18.6 L644,17.5 L646,16.9 L648,16.5 L650,16.3 L652,16.2 L654,16.1 L656,16.0 L658,16.0 L660,16.0 L662,16.0 L664,16.0 L666,16.0 L668,16.0 L670,16.1 L672,16.1 L674,16.2 L676,16.3 L678,16.5 L680,16.9 L682,17.6 L684,18.9 L686,21.3 L688,25.7 L690,33.4 L692,45.4 L694,60.6 L696,75.9 L698,87.8 L700,95.3 L702,99.5 L704,101.7 L706,102.8 L708,103.4 L710,103.7 L712,103.8 L714,103.9 L716,103.9 L718,104.0 L720,104.0 L722,104.0 L724,104.0 L726,104.0 L728,104.0 L730,104.0 L732,104.0 L734,104.0 L736,104.0 L738,103.9 L740,103.9 L742,103.8 L744,103.6 L746,103.1 L748,102.3 L750,100.4 L752,96.3 L754,88.2 L756,74.3 L758,55.8 L760,38.6 L762,27.1 L764,21.1 L766,18.2 L768,17.0 L770,16.5 L772,16.2 L774,16.1 L776,16.1 L778,16.0 L780,16.0 L782,16.0 L784,16.0 L786,16.0 L788,16.0 L790,16.0 L792,16.0 L794,16.0 L796,16.0 L798,16.0 L800,16.0 L802,16.0 L804,16.0 L806,16.1 L808,16.2 L810,16.4 L812,17.0 L814,18.5 L816,22.1 L818,30.5 L820,46.9 L822,69.0 L824,87.2 L826,97.2 L828,101.4 L830,103.0 L832,103.6 L834,103.8 L836,103.9 L838,104.0 L840,104.0 L842,104.0 L844,104.0 L846,104.0 L848,104.0 L850,104.0 L852,104.0 L854,104.0 L856,104.0 L858,104.0 L860,104.0 L862,104.0 L864,104.0 L866,104.0 L868,104.0 L870,104.0 L872,103.9 L874,103.8 L876,103.4 L878,102.4 L880,99.1 L882,90.2 L884,70.7 L886,45.1 L888,27.4 L890,19.8 L892,17.2 L894,16.4 L896,16.1 L898,16.0 L900,16.0 L902,16.0 L904,16.0 L906,16.0 L908,16.0 L910,16.0 L912,16.0 L914,16.0 L916,16.0 L918,16.0 L920,16.0 L922,16.0 L924,16.0 L926,16.0 L928,16.0 L930,16.0 L932,16.0 L934,16.0 L936,16.0 L938,16.1 L940,16.3 L942,17.1 L944,20.0 L946,29.6 L948,52.9 L950,81.5 L952,97.1 L954,102.2 L956,103.5 L958,103.9 L960,104.0 L962,104.0 L964,104.0 L966,104.0 L968,104.0 L970,104.0 L972,104.0 L974,104.0 L976,104.0 L978,104.0 L980,104.0 L982,104.0 L984,104.0 L986,104.0 L988,104.0 L990,104.0 L992,104.0 L994,104.0 L996,104.0 L998,104.0 L1000,104.0 L1002,104.0 L1004,103.8 L1006,103.2 L1008,100.6 L1010,90.1 L1012,61.8 L1014,31.8 L1016,19.7 L1018,16.8 L1020,16.2 L1022,16.0 L1024,16.0 L1026,16.0 L1028,16.0 L1030,16.0 L1032,16.0 L1034,16.0 L1036,16.0 L1038,16.0 L1040,16.0 L1042,16.0 L1044,16.0 L1046,16.0 L1048,16.0 L1050,16.0 L1052,16.0 L1054,16.0 L1056,16.0 L1058,16.0 L1060,16.0 L1062,16.0 L1064,16.0 L1066,16.0 L1068,16.1 L1070,16.5 L1072,19.0 L1074,31.1 L1076,65.2 L1078,94.0 L1080,102.2 L1082,103.7 L1084,103.9 L1086,104.0 L1088,104.0 L1090,104.0 L1092,104.0 L1094,104.0 L1096,104.0 L1098,104.0 L1100,104.0 L1102,104.0 L1104,104.0 L1106,104.0 L1108,104.0 L1110,104.0 L1112,104.0 L1114,104.0 L1116,104.0 L1118,104.0 L1120,104.0 L1122,104.0 L1124,104.0 L1126,104.0 L1128,104.0 L1130,104.0 L1132,103.9 L1134,103.6 L1136,101.3 L1138,86.8 L1140,46.4 L1142,21.5 L1144,16.8 L1146,16.1 L1148,16.0 L1150,16.0 L1152,16.0 L1154,16.0 L1156,16.0 L1158,16.0 L1160,16.0 L1162,16.0 L1164,16.0 L1166,16.0 L1168,16.0 L1170,16.0 L1172,16.0 L1174,16.0 L1176,16.0 L1178,16.0 L1180,16.0 L1182,16.0 L1184,16.0 L1186,16.0 L1188,16.0 L1190,16.0 L1192,16.0 L1194,16.0 L1196,16.0 L1198,16.3 L1200,18.7 L1202,36.8 L1204,82.7 L1206,101.3 L1208,103.7 L1210,104.0 L1212,104.0 L1214,104.0 L1216,104.0 L1218,104.0 L1220,104.0 L1222,104.0 L1224,104.0 L1226,104.0 L1228,104.0 L1230,104.0 L1232,104.0 L1234,104.0 L1236,104.0 L1238,104.0 L1240,104.0 L1242,104.0 L1244,104.0 L1246,104.0 L1248,104.0 L1250,104.0 L1252,104.0 L1254,104.0 L1256,104.0 L1258,104.0 L1260,104.0 L1262,103.8 L1264,101.2 L1266,77.5 L1268,29.1 L1270,17.1 L1272,16.1 L1274,16.0 L1276,16.0 L1278,16.0 L1280,16.0 L1282,16.0 L1284,16.0 L1286,16.0 L1288,16.0 L1290,16.0 L1292,16.0 L1294,16.0 L1296,16.0 L1298,16.0 L1300,16.0 L1302,16.0 L1304,16.0 L1306,16.0 L1308,16.0 L1310,16.0 L1312,16.0 L1314,16.0 L1316,16.0 L1318,16.0 L1320,16.0 L1322,16.0 L1324,16.0 L1326,16.2 L1328,19.2 L1330,51.1 L1332,97.1 L1334,103.6 L1336,104.0 L1338,104.0 L1340,104.0 L1342,104.0 L1344,104.0 L1346,104.0 L1348,104.0 L1350,104.0 L1352,104.0 L1354,104.0 L1356,104.0 L1358,104.0 L1360,104.0 L1362,104.0 L1364,104.0 L1366,104.0 L1368,104.0 L1370,104.0 L1372,104.0 L1374,104.0 L1376,104.0 L1378,104.0 L1380,104.0 L1382,104.0 L1384,104.0 L1386,104.0 L1388,104.0 L1390,103.8 L1392,100.0 L1394,57.3 L1396,19.1 L1398,16.1 L1400,16.0"/>
+      </svg>
+    </div>
+    <span class="steel-caption">Dalla corda al fuzz: la sinusoide viene tosata fino all'onda quadra.</span>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Indice">
+    <p>Indice</p>
+    <ol>
+      <li><a href="#storia">Il fuzz e il FY-2</a></li>
+      <li><a href="#installazione">Installazione</a></li>
+      <li><a href="#interfaccia">L'interfaccia</a></li>
+      <li><a href="#pedale">Il pedale</a></li>
+      <li><a href="#servizio">La barra di servizio</a></li>
+      <li><a href="#calibrazione">Calibrare l'ingresso</a></li>
+      <li><a href="#interno">L'interno</a></li>
+      <li><a href="#midi">Controllo MIDI</a></li>
+      <li><a href="#uso">In studio e dal vivo</a></li>
+      <li><a href="#problemi">Risoluzione dei problemi</a></li>
+      <li><a href="#specifiche">Specifiche</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- 1 ============================================================ -->
+  <section class="ch" id="storia">
+    <h2>Il fuzz e il FY-2</h2>
+    <p class="lead">Il fuzz è nato da un guasto. Per qualche anno è stato considerato un difetto da evitare, poi è diventato il suono della chitarra rock. Il FY-2 appartiene alla generazione di pedali giapponesi che lo hanno reso economico, e quindi disponibile a tutti.</p>
+
+    <h3>Breve storia del fuzz</h3>
+    <ol class="timeline">
+      <li><time>1961</time><div>A Nashville Grady Martin registra l'assolo di basso a sei corde di <em>Don't Worry</em> di Marty Robbins. Un preamplificatore guasto del banco lo distorce. Il brano esce così com'è ed entra in classifica: il pubblico sente per la prima volta un suono «sporco» voluto.</div></li>
+      <li><time>1962</time><div>I tecnici Glenn Snoddy e Revis Hobbs costruiscono un circuito che riproduce quel suono e lo cedono alla Gibson, che lo vende come Maestro FZ-1 Fuzz-Tone. Dopo il primo lotto le vendite si fermano quasi del tutto.</div></li>
+      <li><time>1965</time><div>Keith Richards usa un FZ-1 nel riff di <em>(I Can't Get No) Satisfaction</em> dei Rolling Stones e il fuzz diventa di colpo il suono del momento. A Londra Gary Hurst progetta il Tone Bender.</div></li>
+      <li><time>1966</time><div>Arbiter presenta il Fuzz Face, che con Jimi Hendrix definisce il fuzz «classico» a transistor al germanio.</div></li>
+      <li class="fy2"><time>1967–69</time><div>In Giappone due ex dipendenti della Teisco fondano la Honey. Il progettista Fumio Mieda, autore dello Uni-Vibe, firma i circuiti fuzz della Honey e della Shin-ei, tra cui il Companion FY-2. Nel 1969 la Honey fallisce e la Shin-ei la assorbe.</div></li>
+      <li><time>anni '70</time><div>La Shin-ei costruisce effetti per molti marchi e il FY-2 circola anche con altri nomi. Mieda passerà poi alla Korg, dove firmerà il sintetizzatore MS-20.</div></li>
+      <li><time>oggi</time><div>Gli originali sono rari e ricercati. Il marchio Shin-ei è tornato a produrre repliche e numerosi costruttori artigianali ne offrono cloni.</div></li>
+    </ol>
+
+    <h3>Il Companion FY-2</h3>
+    <p>Il FY-2 è un fuzz in una scatola a cuneo con due manopole, <span class="ctl">VOL</span> e <span class="ctl">FUZZ</span>, e l'interruttore a pedale. Funzionava solo a batteria: il vano si apriva svitando due viti a galletto. Dentro ci sono due transistor al silicio, i NEC 2SC536, invece del germanio dei pedali inglesi: il suono è più duro e più stabile al variare della temperatura.</p>
+    <p>Come molti effetti giapponesi dell'epoca fu venduto anche con altri marchi; Univox ne commercializzò una versione alimentata a rete, la Uni-Fuzz. Nelle registrazioni compare più che dal vivo, anche perché acceso fa calare il volume. Tom Verlaine dei Television ne possedeva e usava uno. L'enciclopedia Wikipedia lo associa, tra gli altri, a Colin Greenwood dei Radiohead (il basso di <em>Exit Music (For a Film)</em> e <em>Myxomatosis</em>), Graham Coxon, Dan Auerbach, William Reid dei Jesus and Mary Chain e Stephen Morris.</p>
+
+    <h3>Il suono del FY-2</h3>
+    <p>Il FY-2 non suona come un Fuzz Face e non va regolato come un Fuzz Face. Queste sono le caratteristiche che lo distinguono, tutte riprodotte dal plugin.</p>
+    <dl class="traits">
+      <div><dt>Satura subito</dt><dd>Bastano pochi millivolt per portarlo in saturazione. Anche suonando piano la nota esce squadrata, compressa e con molto sustain: è un fuzz «a muro», con poca dinamica tra un tocco leggero e uno pesante.</dd></div>
+      <div><dt>Il FUZZ cambia il timbro, non la quantità</dt><dd>La manopola non è un gain. Miscela le uscite dei due stadi, che lavorano in controfase: da un lato prevale la fondamentale e il suono ha più corpo, dall'altro salgono le armoniche e il ronzio. Nelle posizioni intermedie le due uscite si cancellano in parte e il suono si svuota, diventando nasale. Per questo alcuni costruttori la chiamano «Depth» o «Expander».</dd></div>
+      <div><dt>Grana ruvida e medi in avanti</dt><dd>Il silicio dà un fuzz più tagliente e granuloso del germanio, con medi presenti e un attacco che buca il mix. Il FY-2 è noto per il suo carattere «gated»: sul finire della nota il suono non sfuma, si interrompe.</dd></div>
+      <div><dt>Dialoga con il pick-up</dt><dd>L'ingresso ha un'impedenza molto bassa: il pedale «carica» il pick-up, che perde acuti prima ancora di arrivare al fuzz. Single coil, P-90 e humbucker suonano molto diversi, e la manopola del volume della chitarra diventa il vero controllo del guadagno.</dd></div>
+      <div><dt>Uscita bassa</dt><dd>L'originale esce con circa 30&nbsp;mV: acceso, suona più piano che spento. Il plugin compensa con 18&nbsp;dB di guadagno pulito dopo il circuito, che non cambiano il timbro.</dd></div>
+      <div><dt>Ogni esemplare è diverso</dt><dd>Il guadagno dei transistor varia molto da un pezzo all'altro, e la batteria scarica cambia il suono. Il pannello <a href="#interno">Interno</a> permette di regolare entrambe le cose.</dd></div>
+    </dl>
+    <p>Il FYN-2 non usa curve di distorsione approssimate: calcola il circuito originale campione per campione, con i valori del pedale. Tutto ciò che senti, comprese le interazioni tra i comandi, viene dal comportamento del circuito.</p>
+  </section>
+
+  <!-- 2 ============================================================ -->
+  <section class="ch" id="installazione">
+    <h2>Installazione</h2>
+    <p>Il FYN-2 funziona su macOS con processori Apple Silicon (M1–M4) e Intel. Il pacchetto contiene tre versioni dello stesso plugin:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Versione</th><th>Dove viene installata</th><th>Per</th></tr></thead>
+      <tbody>
+        <tr><td>VST3</td><td><code>/Library/Audio/Plug-Ins/VST3</code></td><td>Ableton Live, Cubase, Reaper, Studio One e altre</td></tr>
+        <tr><td>Audio Unit</td><td><code>/Library/Audio/Plug-Ins/Components</code></td><td>Logic Pro, GarageBand, MainStage</td></tr>
+        <tr><td>Standalone</td><td>Applicazioni</td><td>Suonare senza DAW</td></tr>
+      </tbody>
+    </table></div>
+    <ol>
+      <li>Scarica ed estrai <code>FYN2-macOS.zip</code>.</li>
+      <li>Il plugin non è firmato con un certificato Apple, quindi macOS lo blocca al primo avvio. Apri il Terminale, scrivi <code>xattr -dr com.apple.quarantine</code> seguito da uno spazio, trascina nella finestra la cartella <code>FYN-2</code> e premi Invio.</li>
+      <li>Fai doppio clic su <strong>Installa FYN-2.command</strong> e inserisci la password di amministratore. Lo script copia le tre versioni nelle cartelle indicate e rimuove eventuali copie della vecchia versione «PF-2 Fuzz».</li>
+      <li>Riavvia la DAW. In Logic, se il plugin non compare, apri <em>Plug-in Manager</em> e scegli <em>Reset &amp; Rescan Selection</em>.</li>
+    </ol>
+    <div class="note">
+      <h4>Primo avvio della Standalone</h4>
+      <p>macOS chiede il permesso di usare il microfono: concedilo, perché è così che l'app riceve gli ingressi della scheda audio. Poi apri <em>Options › Audio/MIDI Settings</em>, scegli la scheda come ingresso e uscita e togli la spunta da <em>Mute audio input</em>.</p>
+    </div>
+  </section>
+
+  <!-- 3 ============================================================ -->
+  <section class="ch" id="interfaccia">
+    <h2>L'interfaccia</h2>
+    <p>La finestra ha due parti. In basso c'è il pedale, con gli stessi comandi dell'originale. In alto c'è la barra di servizio, con quello che serve in studio: livelli, pick-up, MIDI e accesso all'interno. La finestra si ridimensiona trascinando l'angolo in basso a destra, dal 75% al 200%.</p>
+    <figure class="annotated" aria-labelledby="cap-ui">
+      <div class="shot">
+        <img src="img/main.webp" width="840" height="1560" alt="La finestra completa del FYN-2 con i comandi numerati.">
+        <span class="pin" style="left:15.5%;top:2.0%">1</span>
+        <span class="pin" style="left:68.5%;top:1.8%">2</span>
+        <span class="pin" style="left:77.5%;top:7.6%">3</span>
+        <span class="pin" style="left:89.5%;top:7.6%">4</span>
+        <span class="pin" style="left:54.5%;top:8.3%">5</span>
+        <span class="pin" style="left:63.5%;top:8.3%">6</span>
+        <span class="pin" style="left:57.5%;top:24.2%">7</span>
+        <span class="pin" style="left:76.0%;top:25.6%">8</span>
+        <span class="pin" style="left:42.6%;top:50.8%">9</span>
+        <span class="pin" style="left:84.6%;top:50.8%">10</span>
+      </div>
+      <div>
+        <ol class="legend">
+          <li><span><a href="#trim">INPUT</a>: livello in ingresso al circuito.</span></li>
+          <li><span><a href="#display">Display MIDI</a>: ultimo messaggio ricevuto e stato del MIDI Learn.</span></li>
+          <li><span><a href="#interno">INTERNO</a>: apre il fondo del pedale (alimentazione e transistor).</span></li>
+          <li><span><a href="#trim">OUTPUT</a>: livello finale, dopo il pedale.</span></li>
+          <li><span><a href="#pickup">PICKUP</a>: tipo di pick-up della chitarra.</span></li>
+          <li><span><a href="#chitarre">«…»</a>: salva o elimina le tue chitarre.</span></li>
+          <li><span><a href="#footswitch">Footswitch</a>: accende e spegne l'effetto.</span></li>
+          <li><span><a href="#footswitch">LED</a>: acceso quando l'effetto è attivo.</span></li>
+          <li><span><a href="#vol">VOL</a>: volume d'uscita del pedale.</span></li>
+          <li><span><a href="#fuzz">FUZZ</a>: carattere del fuzz.</span></li>
+        </ol>
+      </div>
+      <figcaption id="cap-ui">La finestra del FYN-2. Ogni comando mostra un suggerimento se ci lasci sopra il puntatore; il clic destro apre il menu MIDI Learn.</figcaption>
+    </figure>
+    <h3>Gesti comuni a tutte le manopole</h3>
+    <ul>
+      <li><strong>Trascina</strong> in verticale per regolare.</li>
+      <li><strong>Doppio clic</strong> per tornare al valore predefinito.</li>
+      <li><strong>Clic destro</strong> per il menu MIDI Learn (vedi <a href="#midi">Controllo MIDI</a>).</li>
+    </ul>
+  </section>
+
+  <!-- 4 ============================================================ -->
+  <section class="ch" id="pedale">
+    <h2>Il pedale</h2>
+    <p>Le manopole hanno una scala da 0 a 10, come quella stampata sul pannello. Entrambe corrispondono ai potenziometri lineari da 50&nbsp;kΩ dell'originale.</p>
+
+    <h3 id="fuzz">FUZZ</h3>
+    <p>Sceglie il colore del fuzz, non la sua quantità: il pedale è saturo in qualunque posizione. Girando in senso orario salgono le armoniche alte e il ronzio. Verso sinistra il suono è più pieno e la fondamentale più forte. Nella zona centrale si trova il timbro più nasale e cavo. Il valore predefinito è 7.</p>
+    <p>Cambiando il FUZZ cambia anche il volume. Dopo ogni regolazione del FUZZ ritocca <span class="ctl">VOL</span>.</p>
+
+    <h3 id="vol">VOL</h3>
+    <p>Volume d'uscita del pedale, predefinito a 5. Come sull'originale è un potenziometro inserito nella rete d'uscita del circuito. Per bilanciare il pedale acceso con quello spento usa VOL; per adattare il plugin al resto della catena usa <a href="#trim">OUTPUT</a>.</p>
+
+    <h3 id="footswitch">Footswitch e LED</h3>
+    <p>Clic sull'interruttore per accendere o spegnere l'effetto. Premuto, il pulsante affonda nella sua ghiera. Il LED rosso, che l'originale non aveva, indica l'effetto attivo.</p>
+    <div class="pair">
+      <figure><img src="img/led_on.webp" width="540" height="260" alt="Footswitch con LED acceso."><figcaption>Effetto attivo.</figcaption></figure>
+      <figure><img src="img/led_off.webp" width="540" height="260" alt="Footswitch con LED spento."><figcaption>Bypass.</figcaption></figure>
+    </div>
+    <p>Il bypass è <em>true bypass</em>, come sul pedale: il segnale passa pulito e, finita una dissolvenza di 50&nbsp;ms che evita i click, il circuito smette di essere calcolato e non consuma CPU. Alla riaccensione il circuito riparte dal suo punto di riposo.</p>
+  </section>
+
+  <!-- 5 ============================================================ -->
+  <section class="ch" id="servizio">
+    <h2>La barra di servizio</h2>
+    <p>Questi comandi non esistono sul FY-2. Servono a inserire il pedale correttamente in una catena digitale.</p>
+
+    <h3 id="trim">INPUT e OUTPUT</h3>
+    <p>Due regolazioni da −24 a +24&nbsp;dB, predefinite a 0&nbsp;dB.</p>
+    <ul>
+      <li><span class="ctl">INPUT</span> agisce prima del circuito, quindi cambia il suono: più segnale significa più compressione e più saturazione, esattamente come una chitarra con pick-up più potenti. Si usa per <a href="#calibrazione">calibrare l'ingresso</a> sulla tua scheda audio.</li>
+      <li><span class="ctl">OUTPUT</span> agisce dopo il circuito e cambia solo il livello. Equivale ad alzare o abbassare l'amplificatore.</li>
+    </ul>
+
+    <h3 id="display">Display MIDI</h3>
+    <p>Mostra l'ultimo controllo MIDI ricevuto, per esempio <code>CC 21 = 96 -&gt; VOLUME</code>: numero del controller, valore e comando a cui è assegnato. Durante il MIDI Learn indica quale comando è in attesa di un controller.</p>
+
+    <h3 id="pickup">PICKUP</h3>
+    <p>Indica al plugin che chitarra stai suonando. Sul pedale vero il pick-up fa parte del circuito d'ingresso. Inoltre la scheda audio, a differenza del FY-2, registra il pick-up quasi a vuoto, con il suo picco di risonanza. Scegliendo il pick-up il plugin ricostruisce il segnale che il FY-2 avrebbe ricevuto da quella chitarra.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Opzione</th><th class="n">Resistenza</th><th class="n">Induttanza</th><th>Effetto sul suono</th></tr></thead>
+      <tbody>
+        <tr><td>Ideale</td><td class="n">10&nbsp;kΩ</td><td class="n">—</td><td>Nessuna interazione e nessuna correzione. Per sorgenti che non sono una chitarra o per tracce già trattate.</td></tr>
+        <tr><td>Single coil</td><td class="n">6&nbsp;kΩ</td><td class="n">2,5&nbsp;H</td><td>Il più brillante; è l'impostazione predefinita.</td></tr>
+        <tr><td>P-90</td><td class="n">8&nbsp;kΩ</td><td class="n">6&nbsp;H</td><td>Il più scuro e corposo.</td></tr>
+        <tr><td>Humbucker</td><td class="n">10&nbsp;kΩ</td><td class="n">5&nbsp;H</td><td>Scuro, tra il single coil e il P-90.</td></tr>
+        <tr><td>Personalizzato</td><td class="n">2–20&nbsp;kΩ</td><td class="n">0,5–10&nbsp;H</td><td>I valori del tuo pick-up.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Con <strong>Personalizzato</strong> compaiono due cursori, R e L. La resistenza in continua (in kΩ) è quasi sempre dichiarata dal costruttore del pick-up; l'induttanza (in henry) meno spesso: se non la conosci, parti dal valore del tipo più simile.</p>
+
+    <h3 id="chitarre">Le mie chitarre</h3>
+    <p>Il pulsante <strong>«…»</strong> accanto al menu salva i valori attuali con il nome della chitarra, per esempio «Tele» o «SG». Le chitarre salvate compaiono nel menu, nella sezione <em>Le mie chitarre</em>. Salvando con un nome già usato aggiorni quella chitarra; dallo stesso pulsante puoi eliminarla.</p>
+    <p>L'elenco è unico per tutti i progetti e tutte le DAW. Ogni progetto ricorda quale chitarra era selezionata. Se modifichi R o L di una chitarra salvata, il menu torna su «Personalizzato» finché non la salvi di nuovo.</p>
+  </section>
+
+  <!-- 6 ============================================================ -->
+  <section class="ch" id="calibrazione">
+    <h2>Calibrare l'ingresso</h2>
+    <p class="lead">Un fuzz reagisce alla tensione reale che esce dalla chitarra. Il plugin, però, riceve un numero digitale, e quanti volt rappresenti dipende dalla scheda audio e dal suo guadagno.</p>
+    <p>Il FYN-2 assume che il fondo scala digitale (0&nbsp;dBFS) corrisponda a 1 volt di picco. Quasi tutte le schede, con il guadagno dell'ingresso strumento al minimo, hanno un fondo scala più alto. Il plugin quindi riceve la chitarra più debole di com'è davvero, e il pedale suona un po' meno saturo dell'originale.</p>
+    <p>Con il guadagno al minimo, inoltre, la scheda non chiude l'ingresso: abbassa solo la sensibilità. Una chitarra arriva comunque con un segnale ben udibile, e al FY-2 bastano pochi millivolt per saturare. Per questo senti il fuzz pieno anche con la manopola della scheda a zero.</p>
+
+    <h3>Il calcolo</h3>
+    <p>Cerca nelle specifiche della tua scheda il livello massimo dell'ingresso strumento (<span class="nw">Hi-Z</span>, DI o Inst) con il guadagno al minimo, espresso in dBu. Poi:</p>
+    <div class="formula">
+      <p class="eq">INPUT = livello massimo della scheda in dBu <span>+ 0,8&nbsp;dB</span></p>
+      <small>Per ogni dB di guadagno che aggiungi sulla scheda, togli un dB da INPUT.</small>
+    </div>
+    <h4>Esempio: Audient iD14 MKII</h4>
+    <p>Il manuale dichiara per l'ingresso DI un livello massimo di +10&nbsp;dBu. Con il guadagno al minimo e il boost da +10&nbsp;dB dell'app iD disattivato, imposta <span class="ctl">INPUT</span> a <strong>+10,8&nbsp;dB</strong>. Con il boost attivo, scendi a +0,8&nbsp;dB.</p>
+    <div class="note">
+      <h4>Dopo la calibrazione</h4>
+      <p>Il pedale suonerà più saturo e compresso di prima, come l'originale. Per pulire il suono usa il volume della chitarra, non il guadagno della scheda: è il modo in cui si suonava il FY-2. La calibrazione vale solo con il guadagno della scheda al minimo, perché le posizioni intermedie della manopola non sono graduate.</p>
+    </div>
+  </section>
+
+  <!-- 7 ============================================================ -->
+  <section class="ch" id="interno">
+    <h2>L'interno</h2>
+    <p>Il pulsante <span class="ctl">INTERNO</span> apre il fondo del pedale. Qui si regolano due cose che sul FY-2 non hanno una manopola, ma che cambiano il suono di un esemplare rispetto a un altro: la batteria e i transistor.</p>
+    <figure class="annotated" aria-labelledby="cap-int">
+      <div class="shot">
+        <img src="img/interior.webp" width="840" height="1560" alt="Il pannello Interno con batteria, deviatore, manopola CARICA e i due trimmer dei transistor.">
+        <span class="pin" style="left:43.5%;top:30.0%">1</span>
+        <span class="pin" style="left:89.5%;top:29.0%">2</span>
+        <span class="pin" style="left:82.0%;top:39.5%">3</span>
+        <span class="pin" style="left:40.5%;top:68.0%">4</span>
+        <span class="pin" style="left:78.5%;top:68.0%">5</span>
+        <span class="pin" style="left:58.0%;top:92.0%">6</span>
+        <span class="pin" style="left:85.0%;top:92.0%">7</span>
+      </div>
+      <div>
+        <ol class="legend">
+          <li><span><strong>Batteria</strong>: tensione e carica residua.</span></li>
+          <li><span><a href="#alimentazione">BATT / DC</a>: batteria o alimentatore.</span></li>
+          <li><span><a href="#carica">CARICA</a>: quanto è scarica la batteria.</span></li>
+          <li><span><a href="#transistor">hFE Q1</a>: guadagno del primo transistor.</span></li>
+          <li><span><a href="#transistor">hFE Q2</a>: guadagno del secondo transistor.</span></li>
+          <li><span><strong>VALORI ORIGINALI</strong>: batteria a 9&nbsp;V e transistor a hFE 226.</span></li>
+          <li><span><strong>CHIUDI</strong>: torna al pedale.</span></li>
+        </ol>
+      </div>
+      <figcaption id="cap-int">Il pannello Interno. Le modifiche avvengono in modo graduale, senza salti di volume.</figcaption>
+    </figure>
+
+    <h3 id="alimentazione">Batteria o alimentatore</h3>
+    <p>L'originale funzionava solo a batteria. <span class="ctl">BATT</span> simula una 9&nbsp;V di cui scegli lo stato di carica; <span class="ctl">DC</span> simula un alimentatore stabilizzato a 9&nbsp;V, sempre uguale, utile quando vuoi un riferimento che non cambia.</p>
+
+    <h3 id="carica">CARICA</h3>
+    <p>Regola la tensione della batteria da 9,6&nbsp;V, appena tolta dalla confezione, a 5,4&nbsp;V, esaurita. Il pannello mostra la carica residua secondo la curva di scarica di una alcalina da 9&nbsp;V. L'arco rosso, fino a 4,5&nbsp;V, va oltre il punto in cui una batteria vera smetterebbe di funzionare: è lì per chi cerca suoni insoliti.</p>
+    <div class="table-wrap"><table>
+      <caption>Tensione e carica residua</caption>
+      <thead><tr><th class="n">Tensione</th><th class="n">Carica</th><th>Stato</th></tr></thead>
+      <tbody>
+        <tr><td class="n">9,6&nbsp;V</td><td class="n">100%</td><td>Batteria nuova</td></tr>
+        <tr><td class="n">9,0&nbsp;V</td><td class="n">86%</td><td>Valore predefinito</td></tr>
+        <tr><td class="n">8,1&nbsp;V</td><td class="n">50%</td><td>A metà vita</td></tr>
+        <tr><td class="n">7,4&nbsp;V</td><td class="n">25%</td><td>Da cambiare presto</td></tr>
+        <tr><td class="n">6,6&nbsp;V</td><td class="n">10%</td><td>Quasi esaurita</td></tr>
+        <tr><td class="n">5,4&nbsp;V</td><td class="n">0%</td><td>Esaurita</td></tr>
+        <tr><td class="n">4,5&nbsp;V</td><td class="n">—</td><td>Oltre la scarica (zona rossa)</td></tr>
+      </tbody>
+    </table></div>
+    <p>Il FY-2 si autopolarizza, quindi con la batteria scarica non «sputacchia» come un Fuzz Face. Scendendo di tensione il volume cala (circa −7&nbsp;dB a 5,4&nbsp;V) e il suono si comprime. Le armoniche pari crescono molto: il fuzz diventa più caldo e asimmetrico, quasi ottavato. Compensa il calo di livello con VOL od OUTPUT.</p>
+
+    <h3 id="transistor">I transistor: hFE Q1 e hFE Q2</h3>
+    <p>L'hFE è il guadagno di un transistor e cambia molto da un esemplare all'altro, anche nella stessa partita. Per questo due FY-2 non suonano mai uguali. I trimmer vanno da 60 a 560; l'originale montava transistor di classe F (hFE 160–320) e il valore predefinito, 226, ne è il centro.</p>
+    <ul>
+      <li><strong>Q1</strong> è il primo stadio: decide quanto il pedale satura e comprime.</li>
+      <li><strong>Q2</strong> è lo stadio d'uscita: con valori alti il suono è più «affamato» e aggressivo, con valori bassi più morbido.</li>
+    </ul>
+    <p>Sotto ogni trimmer compare la classe corrispondente (da D a G). Doppio clic su un trimmer o sulla manopola CARICA per tornare al valore originale.</p>
+    <div class="note pcb">
+      <h4>Tutto è automatizzabile</h4>
+      <p>Alimentazione, carica e transistor sono parametri come gli altri: puoi automatizzarli nella DAW o assegnarli a un controller MIDI. Una batteria che si scarica lungo un brano è un effetto possibile.</p>
+    </div>
+  </section>
+
+  <!-- 8 ============================================================ -->
+  <section class="ch" id="midi">
+    <h2>Controllo MIDI</h2>
+    <p>Ogni comando del pedale e dell'interno si può pilotare da un controller MIDI, per esempio una Arturia KeyLab. Tre comandi sono già assegnati.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Comando</th><th class="n">CC predefinito</th></tr></thead>
+      <tbody>
+        <tr><td>FUZZ</td><td class="n">20</td></tr>
+        <tr><td>VOLUME</td><td class="n">21</td></tr>
+        <tr><td>Footswitch</td><td class="n">64 (pedale sustain)</td></tr>
+      </tbody>
+    </table></div>
+    <p>Si possono assegnare anche INPUT, OUTPUT, alimentazione, carica, hFE Q1 e hFE Q2.</p>
+
+    <h3>Assegnare un controller</h3>
+    <ol>
+      <li>Clic destro sul comando e scegli <em>MIDI Learn</em>. Il display mostra il comando in attesa.</li>
+      <li>Muovi la manopola, il cursore o il pulsante del controller. L'assegnazione è fatta.</li>
+    </ol>
+    <p>Dallo stesso menu puoi annullare il Learn, rimuovere l'assegnazione di un comando o ripristinare la mappatura predefinita. La mappatura viene salvata nel progetto.</p>
+    <p>Footswitch e deviatore BATT/DC cambiano stato a ogni pressione del pulsante. Sulla KeyLab imposta il pulsante in modalità <em>Gate</em> (momentanea) in Arturia MIDI Control Center: in modalità <em>Toggle</em> il pulsante invia la pressione e il rilascio in due colpi separati, e servirebbero due pressioni per ogni commutazione.</p>
+
+    <h3>Nelle DAW</h3>
+    <dl class="traits">
+      <div><dt>Ableton Live</dt><dd>Inserisci il plugin sulla traccia audio della chitarra. Crea una traccia MIDI con ingresso KeyLab e in <em>MIDI To</em> scegli la traccia della chitarra e poi «FYN-2». In alternativa usa la mappatura MIDI di Live (Cmd+M) direttamente sui parametri.</dd></div>
+      <div><dt>Logic Pro</dt><dd>L'Audio Unit è un normale effetto audio e non riceve i CC. Usa le assegnazioni dei controller di Logic: Cmd+K, muovi il comando nel plugin, poi la manopola sulla tastiera. Il MIDI Learn interno vale per VST3 e Standalone.</dd></div>
+      <div><dt>Altre DAW VST3</dt><dd>I CC arrivano attraverso i parametri «MIDI CC» che il formato VST3 espone. Per questo nell'elenco delle automazioni ne vedrai molti: è normale.</dd></div>
+    </dl>
+  </section>
+
+  <!-- 9 ============================================================ -->
+  <section class="ch" id="uso">
+    <h2>In studio e dal vivo</h2>
+
+    <h3>La posizione nella catena</h3>
+    <p>Metti il FYN-2 per primo, direttamente sulla traccia della chitarra registrata dall'ingresso strumento. Il pedale vero va collegato alla chitarra perché il suo ingresso interagisce con il pick-up, e il plugin ricostruisce proprio quell'interazione: un compressore, un equalizzatore o un altro pedale prima del FYN-2 la falserebbero. Dopo il fuzz mettici quello che vuoi; un simulatore di amplificatore è il complemento naturale.</p>
+    <p>Registrare la chitarra pulita e applicare il fuzz in seguito ti permette di cambiare impostazioni a registrazione finita, come in un reamping. Ricordati di scegliere il pick-up della chitarra usata per quella traccia.</p>
+
+    <h3>Punti di partenza</h3>
+    <p>Impostazioni da cui partire, da rifinire a orecchio. Dove non è indicato altro, batteria a 9&nbsp;V e transistor ai valori originali.</p>
+    <div class="patches">
+      <div class="patch">
+        <div><h4>Riff garage</h4><p>Più corpo e meno ronzio, per riff ritmici che restano comprensibili.</p><p class="set">Single coil, volume della chitarra al massimo</p></div>
+        <div class="knobs" data-vol="6" data-fuzz="3"></div>
+      </div>
+      <div class="patch">
+        <div><h4>Muro di ronzio</h4><p>Il FUZZ tutto aperto con un humbucker: saturazione massima, armoniche alte, sustain lunghissimo.</p><p class="set">Humbucker</p></div>
+        <div class="knobs" data-vol="5" data-fuzz="10"></div>
+      </div>
+      <div class="patch">
+        <div><h4>Il centro cavo</h4><p>Nella zona centrale del FUZZ le uscite dei due stadi si cancellano in parte: un timbro nasale che si fa largo nel mix.</p><p class="set">Qualsiasi pick-up</p></div>
+        <div class="knobs" data-vol="6" data-fuzz="5"></div>
+      </div>
+      <div class="patch">
+        <div><h4>Dal volume della chitarra</h4><p>Lascia il pedale aperto e abbassa il volume della chitarra a 5–6: il fuzz si assottiglia fino a un crunch. Rialzalo per l'assolo.</p><p class="set">P-90 o humbucker</p></div>
+        <div class="knobs" data-vol="7" data-fuzz="7"></div>
+      </div>
+      <div class="patch">
+        <div><h4>Batteria stanca</h4><p>Più compresso, caldo e asimmetrico, quasi ottavato sulle note alte. Recupera il livello con OUTPUT.</p><p class="set">Interno: BATT, CARICA a 6,6&nbsp;V (10%)</p></div>
+        <div class="knobs" data-vol="7" data-fuzz="7"></div>
+      </div>
+      <div class="patch">
+        <div><h4>Esemplare cattivo</h4><p>Due transistor molto «caldi», come un FY-2 uscito bene dalla fabbrica: più aggressivo e più saturo.</p><p class="set">Interno: hFE Q1 400, hFE Q2 320</p></div>
+        <div class="knobs" data-vol="5" data-fuzz="7"></div>
+      </div>
+    </div>
+
+    <h3>Dal vivo con la Standalone</h3>
+    <p>La Standalone è il modo più diretto per suonare con il FYN-2 senza aprire una DAW. Imposta nella scheda audio un buffer basso (64 o 128&nbsp;campioni) per ridurre il ritardo tra corda e suono; il plugin aggiunge solo 6&nbsp;campioni di latenza. Con un controller MIDI puoi accendere il pedale con il CC 64, cioè con un normale pedale sustain.</p>
+  </section>
+
+  <!-- 10 ============================================================ -->
+  <section class="ch" id="problemi">
+    <h2>Risoluzione dei problemi</h2>
+    <h4>La Standalone non riceve la chitarra</h4>
+    <p>Apri <em>Impostazioni di Sistema › Privacy e sicurezza › Microfono</em> e abilita FYN-2. Poi, in <em>Options › Audio/MIDI Settings</em>, controlla che la scheda sia selezionata come ingresso e togli la spunta da <em>Mute audio input</em>.</p>
+    <h4>La chitarra arriva forte anche con il guadagno della scheda a zero</h4>
+    <p>È normale: al minimo la scheda abbassa la sensibilità ma non chiude l'ingresso, e il FY-2 satura con pochissimo segnale. Vedi <a href="#calibrazione">Calibrare l'ingresso</a> e usa il volume della chitarra per pulire il suono.</p>
+    <h4>Logic non mostra il plugin</h4>
+    <p>In <em>Plug-in Manager</em> seleziona FYN-2 e scegli <em>Reset &amp; Rescan Selection</em>. Se ancora non compare, chiudi Logic e scrivi nel Terminale <code>killall -9 AudioComponentRegistrar</code>.</p>
+    <h4>macOS dice che il plugin è danneggiato o non può essere aperto</h4>
+    <p>È il blocco per i programmi scaricati da Internet senza firma Apple. Ripeti il passo 2 dell'<a href="#installazione">installazione</a> e reinstalla.</p>
+    <h4>Il footswitch MIDI risponde solo a una pressione su due</h4>
+    <p>Il pulsante del controller è in modalità <em>Toggle</em>. Impostalo in modalità <em>Gate</em> (momentanea).</p>
+    <h4>Il pedale acceso suona più piano o più forte di quello spento</h4>
+    <p>Bilancia con <span class="ctl">VOL</span>. Se vuoi confronti precisi, regola OUTPUT finché acceso e spento hanno lo stesso livello percepito.</p>
+  </section>
+
+  <!-- 11 ============================================================ -->
+  <section class="ch" id="specifiche">
+    <h2>Specifiche</h2>
+    <div class="table-wrap"><table>
+      <tbody>
+        <tr><th scope="row">Formati</th><td>VST3, Audio Unit, Standalone</td></tr>
+        <tr><th scope="row">Sistema</th><td>macOS, Apple Silicon e Intel</td></tr>
+        <tr><th scope="row">Canali</th><td>Mono: usa il canale d'ingresso su cui arriva la chitarra e copia l'uscita su tutti i canali</td></tr>
+        <tr><th scope="row">Frequenze di campionamento</th><td>44,1–192&nbsp;kHz. Il circuito lavora sempre tra 350 e 390&nbsp;kHz (sovracampionamento 8× a 44,1/48&nbsp;kHz, 4× a 88,2/96&nbsp;kHz, 2× a 176,4/192&nbsp;kHz)</td></tr>
+        <tr><th scope="row">Latenza</th><td>6&nbsp;campioni, compensata automaticamente dalla DAW</td></tr>
+        <tr><th scope="row">Carico di CPU</th><td>Circa il 9% di un core con l'effetto attivo; nullo in bypass</td></tr>
+        <tr><th scope="row">Comandi</th><td>FUZZ, VOL, footswitch; INPUT e OUTPUT ±24&nbsp;dB; pick-up; alimentazione, carica 4,5–9,6&nbsp;V, hFE Q1 e Q2 60–560</td></tr>
+        <tr><th scope="row">MIDI</th><td>MIDI Learn su tutti i comandi; predefiniti CC 20, 21 e 64</td></tr>
+        <tr><th scope="row">Modello</th><td>Simulazione del circuito completo del Shin-ei FY-2 con transistor NEC 2SC536 e potenziometri da 50&nbsp;kΩ lineari</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Fonti della parte storica</h3>
+    <ul class="sources">
+      <li><a href="https://en.wikipedia.org/wiki/Maestro_FZ-1_Fuzz-Tone">Maestro FZ-1 Fuzz-Tone</a>, Wikipedia</li>
+      <li><a href="https://www.fuzzfaced.net/nascita-del-fuzz.html">La nascita del fuzz</a>, FuzzFaced</li>
+      <li><a href="https://en.wikipedia.org/wiki/Shin-ei_Companion_FY-2">Shin-ei Companion FY-2</a>, Wikipedia</li>
+      <li><a href="https://www.vintageguitar.com/22533/univox-uni-fuzz-super-fuzz/">Univox Uni-Fuzz &amp; Super-Fuzz</a>, Vintage Guitar</li>
+      <li><a href="https://www.coda-effects.com/2018/07/univox-superfuzz-from-70s-history-post.html">Univox Superfuzz: history</a>, Coda Effects</li>
+      <li><a href="https://tymguitars.com.au/blogs/blog/tym-fuzz-box-fy-2">Tym Fuzz Box FY-2</a>, Tym Guitars</li>
+      <li><a href="https://retrofret.com/products/shin-ei-companion-fy-2-owned-and-used-by-tom-verlaine-fuzz-effect-1970-13180">Shin-ei Companion FY-2 di Tom Verlaine</a>, Retrofret</li>
+      <li><a href="https://d9w4fhj63j193.cloudfront.net/2021/iD14MKII/English/iD14%20MKII%20Manual%20V1.3.pdf">Audient iD14 MKII, manuale V1.3</a></li>
+    </ul>
+    <p style="font-size:14.5px;color:var(--grafite)">Shin-ei, Companion, Univox, Maestro, Gibson e gli altri marchi citati appartengono ai rispettivi proprietari e sono nominati solo per riferimento storico. Il FYN-2 non è affiliato a nessuno di essi. Caratteri dell'interfaccia: Archivo Black (SIL Open Font License) e Yellowtail (Apache 2.0).</p>
+  </section>
+
+  </main>
+</div>
+
+<footer>
+  <div>
+    <span class="brand" aria-label="Collateral Effects"><b>Collateral</b><small>EFFECTS</small></span>
+    <span>FYN-2 Fuzz Box, manuale d'uso, versione 1.1. Per stampare o salvare in PDF usa il comando Stampa del browser.</span>
+  </div>
+</footer>
+
+<script>
+// manopole in miniatura per i punti di partenza: scala 0–10 su 270°, come sul pannello
+document.querySelectorAll('.knobs').forEach(function(box){
+  [['VOL',box.dataset.vol],['FUZZ',box.dataset.fuzz]].forEach(function(k){
+    var v=parseFloat(k[1]), a=(-135+v*27)*Math.PI/180, dots='';
+    for(var i=0;i<=10;i++){var b=(-135+i*27)*Math.PI/180;dots+='<circle cx="'+(27+Math.sin(b)*24).toFixed(1)+'" cy="'+(27-Math.cos(b)*24).toFixed(1)+'" r="1.6" fill="#2d3035"/>';}
+    var d=document.createElement('div');d.className='knob';
+    d.innerHTML='<svg viewBox="0 0 54 54" role="img" aria-label="'+k[0]+' a '+String(v).replace('.',',')+'">'+dots+
+      '<circle cx="27" cy="27" r="18" fill="#1c1d20"/><circle cx="27" cy="27" r="8.5" fill="#d9dce0"/>'+
+      '<line x1="'+(27+Math.sin(a)*10.5).toFixed(1)+'" y1="'+(27-Math.cos(a)*10.5).toFixed(1)+'" x2="'+(27+Math.sin(a)*16.5).toFixed(1)+'" y2="'+(27-Math.cos(a)*16.5).toFixed(1)+'" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg>'+k[0]+' '+String(v).replace('.',',');
+    box.appendChild(d);
+  });
+});
+// lunghezza del tracciato per l'animazione dell'onda
+var w=document.querySelector('.wave'); if(w){w.style.setProperty('--len',Math.ceil(w.getTotalLength()));}
+// capitolo corrente nell'indice
+var links=[].slice.call(document.querySelectorAll('.toc a'));
+if('IntersectionObserver' in window){
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){
+    links.forEach(function(l){l.setAttribute('aria-current',l.getAttribute('href')==='#'+e.target.id?'true':'false');});}});},
+    {rootMargin:'-30% 0px -60% 0px'});
+  document.querySelectorAll('section.ch').forEach(function(s){io.observe(s);});
+}
+</script>
+</body>
+</html>
